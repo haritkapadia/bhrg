@@ -10,6 +10,8 @@
 #include <essentia/pool.h>
 
 #include "entity.hpp"
+#include "world.hpp"
+#include "spell.hpp"
 
 #define SAMPLE_RATE 44100
 
@@ -92,40 +94,76 @@ int main(int argc, char* argv[]) {
   running = true;
   Mix_PlayMusic(music, 0);
   unsigned long long start = SDL_GetTicks();
+  unsigned long long prev_ticks, curr_ticks;
   unsigned int tempo_color = 0, beat_color = 0;
   unsigned long long ibeat = 0;
   double spb = 0;
-  Entity player = Entity(0, 0);
+  World world;
+  world.spawn(new Player(0.5, 0.5));
+  Spell relocate = Spell(&world, Spell::Type::TARGET);
+  prev_ticks = SDL_GetTicks();
   while(running) {
+    curr_ticks = SDL_GetTicks();
     SDL_Event e;
+    int mx, my;
+    SDL_GetMouseState(&mx, &my);
+    double target_x = mx/250.0 - 1;
+    double target_y = 1 - my/250.0;
     while(SDL_PollEvent(&e) != 0) {
-      switch(e.type) {
-      case SDL_KEYDOWN:
+      if(e.type == SDL_KEYDOWN) {
         switch(e.key.keysym.sym) {
         case SDLK_ESCAPE:
           running = false;
           break;
         case SDLK_w:
-          player.move(0, -0.05);
+          world.player(0)->vy(0.5);
           break;
         case SDLK_s:
-          player.move(0, 0.05);
+          world.player(0)->vy(-0.5);
           break;
         case SDLK_a:
-          player.move(-0.05, 0);
+          world.player(0)->vx(-0.5);
           break;
         case SDLK_d:
-          player.move(0.05, 0);
+          world.player(0)->vx(0.5);
+          break;
+        case SDLK_PERIOD:
+          relocate.use(world.player(0), target_x, target_y);
+          std::cout << "entities at ";
+          for(auto e : world.entities_in_bounds(Bounds(-1, -1, 2, 2)))
+            std::cout << *e << ' ';
+          std::cout << '\n';
+          break;
+        case SDLK_SPACE:
+          {
+            Bullet* bullet = new Bullet(world.player(0)->x(), world.player(0)->y());
+            bullet->vx(target_x - bullet->x());
+            bullet->vy(target_y - bullet->y());
+            world.spawn(bullet);
+          }
           break;
         default:
           break;
         }
-        break;
-      case SDL_QUIT:
+      } else if(e.type == SDL_KEYUP) {
+        switch(e.key.keysym.sym) {
+        case SDLK_w:
+          world.player(0)->vy(0);
+          break;
+        case SDLK_s:
+          world.player(0)->vy(0);
+          break;
+        case SDLK_a:
+          world.player(0)->vx(0);
+          break;
+        case SDLK_d:
+          world.player(0)->vx(0);
+          break;
+        default:
+          break;
+        }
+      } else if(e.type == SDL_QUIT) {
         running = false;
-        break;
-      default:
-        break;
       }
     }
 
@@ -141,6 +179,10 @@ int main(int argc, char* argv[]) {
         break;
     }
 
+    for(MovingEntity* e : *world.moving_entities()) {
+      e->move((curr_ticks - prev_ticks) / 1000.0);
+    }
+
     SDL_Rect rect;
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
@@ -151,8 +193,17 @@ int main(int argc, char* argv[]) {
     rect = {250, 0, 250, 500};
     SDL_RenderFillRect(renderer, &rect);
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    fill_circle(renderer, 250 + 250 * player.x(), 250 + 250 * player.y(), 10);
+    
+    for(Entity* e : world.entities_in_bounds(Bounds(-1, -1, 2, 2))) {
+      if(e == world.player(0))
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+      fill_circle(renderer, 250 + 250 * e->x(), 250 - 250 * e->y(), 10);
+      if(e == world.player(0))
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    }
     SDL_RenderPresent(renderer);
+
+    prev_ticks = curr_ticks;
   }
 
   essentia::shutdown();

@@ -3,7 +3,7 @@ CC = clang++
 SRC = src
 BUILD = build
 
-_OBJS = bhrg.cpp entity.cpp
+_OBJS = bhrg.cpp entity.cpp bounds.cpp world.cpp spell.cpp
 OBJS = $(patsubst %,$(SRC)/%,$(_OBJS))
 
 INCLUDE_FLAGS = -I$(SRC)/entity.hpp -I/usr/local/include/essentia/ -I/usr/local/include/essentia/scheduler/ -I/usr/local/include/essentia/streaming/ -I/usr/local/include/essentia/utils -I/usr/local/include/essentia
