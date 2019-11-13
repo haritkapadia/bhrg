@@ -2,23 +2,24 @@
 #define ENTITY_HPP
 
 #include <ostream>
+#include "bounds.hpp"
+#include "class_util.hpp"
 
 class Entity {
 private:
-  double _x, _y;
+  Position _position;
+  Bounds* _bounds;
 public:
-  Entity(double _x, double _y);
-  double x();
-  double y();
-  void x(double _x);
-  void y(double _y);
+  Entity(Position _position, Bounds* _bounds);
+  GetSetDecl(Position, position);
+  GetSetDecl(Bounds*, bounds);
   void translate(double dx, double dy);
   friend std::ostream& operator<<(std::ostream& os, Entity const& e);
 };
 
 class MovingEntity : public Entity {
 public:
-  MovingEntity(double _x, double _y);
+  MovingEntity(Position _position, Bounds* _bounds);
   virtual void move(double duration) = 0;
 };
 
@@ -27,9 +28,9 @@ private:
   double _vx;
   double _vy;
 public:
-  Player(double _x, double _y);
-  void vx(double _vx);
-  void vy(double _vy);
+  Player(Position _position, Bounds* _bounds);
+  GetSetDecl(double, vx);
+  GetSetDecl(double, vy);
   virtual void move(double duration);
 };
 
@@ -38,9 +39,9 @@ private:
   double _vx;
   double _vy;
 public:
-  Bullet(double _x, double _y);
-  void vx(double _vx);
-  void vy(double _vy);
+  Bullet(Position _position, Bounds* _bounds);
+  GetSetDecl(double, vx);
+  GetSetDecl(double, vy);
   virtual void move(double duration);
 };
 

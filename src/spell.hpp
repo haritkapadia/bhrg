@@ -4,10 +4,15 @@
 
 class Spell {
 public:
-  enum Type {SELF, PROJECTILE, TARGET};
+  enum Type
+    {
+     SELF,
+     PROJECTILE,
+     TARGET
+    };
 private:
-  Type _type;
   World* world;
+  Type _type;
 public:
   Spell(World*, Type);
   void use(Entity* caster, double x, double y);
