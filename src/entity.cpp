@@ -1,43 +1,37 @@
+
 #include "entity.hpp"
 
 #include <iostream>
 #include "class_util.hpp"
 
-Entity::Entity(Position _position, Bounds* _bounds) :
-  _position(_position),
-  _bounds(_bounds) {}
-
-GetSet(Entity, Position, position);
-GetSet(Entity, Bounds*, bounds);
+Entity::Entity(Region* region) :
+  region(region) {}
 
 void Entity::translate(double dx, double dy) {
-  _position.x += dx;
-  _position.y += dy;
+  region->position = region->position + Vec2(dx, dy);
+}
+void Entity::translate(Vec2 v) {
+  region->position = region->position + v;
 }
 
 std::ostream& operator<<(std::ostream& os, Entity const& e) {
-  return os << "(" << e._position.x << ", " << e._position.y << ")";
+  return os << e.region;
 }
 
-MovingEntity::MovingEntity(Position _position, Bounds* _bounds) :
-  Entity(_position, _bounds) {}
+MovingEntity::MovingEntity(Region* region) :
+  Entity(region) {}
 
-Player::Player(Position _position, Bounds* _bounds) :
-  MovingEntity(_position, _bounds) {}
-
-GetSet(Player, double, vx);
-GetSet(Player, double, vy);
+Player::Player(PolygonRegion* region) :
+  MovingEntity(region),
+  region(region) {}
 
 void Player::move(double duration) {
-  translate(_vx * duration, _vy * duration);
+  translate(velocity * duration);
 }
 
-Bullet::Bullet(Position _position, Bounds* _bounds) :
-  MovingEntity(_position, _bounds) {}
-
-GetSet(Bullet, double, vx);
-GetSet(Bullet, double, vy);
+Bullet::Bullet(Region* region) :
+  MovingEntity(region) {}
 
 void Bullet::move(double duration) {
-  translate(_vx * duration, _vy * duration);
+  translate(velocity * duration);
 }

@@ -4,44 +4,36 @@
 #include <ostream>
 #include "bounds.hpp"
 #include "class_util.hpp"
+#include "vec.hpp"
+#include "region.hpp"
 
 class Entity {
-private:
-  Position _position;
-  Bounds* _bounds;
 public:
-  Entity(Position _position, Bounds* _bounds);
-  GetSetDecl(Position, position);
-  GetSetDecl(Bounds*, bounds);
+  Region* region;
+  Entity(Region* region);
   void translate(double dx, double dy);
+  void translate(Vec2 v);
   friend std::ostream& operator<<(std::ostream& os, Entity const& e);
 };
 
 class MovingEntity : public Entity {
 public:
-  MovingEntity(Position _position, Bounds* _bounds);
+  MovingEntity(Region* region);
   virtual void move(double duration) = 0;
 };
 
 class Player : public MovingEntity {
-private:
-  double _vx;
-  double _vy;
 public:
-  Player(Position _position, Bounds* _bounds);
-  GetSetDecl(double, vx);
-  GetSetDecl(double, vy);
+  PolygonRegion* region;
+  Player(PolygonRegion* region);
+  Vec2 velocity;
   virtual void move(double duration);
 };
 
 class Bullet : public MovingEntity {
-private:
-  double _vx;
-  double _vy;
 public:
-  Bullet(Position _position, Bounds* _bounds);
-  GetSetDecl(double, vx);
-  GetSetDecl(double, vy);
+  Bullet(Region* region);
+  Vec2 velocity;
   virtual void move(double duration);
 };
 

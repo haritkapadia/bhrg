@@ -4,21 +4,18 @@
 #include <vector>
 #include <iostream>
 
-#define ThroughVector(p, b, ve, out)                                    \
-  for(auto e = (ve).begin(); e != (ve).end(); e++)                      \
-    if((b)->contains(p, {(**e).position().x, (**e).position().y}))      \
-      (out).push_back(*e);
-
 World::World() {}
 
 std::vector<Entity*> World::entities_in_area(Position position, Bounds* bounds) {
   std::vector<Entity*> out;
-  ThroughVector(position, bounds, _moving_entities, out);
-  ThroughVector(position, bounds, _other_entities, out);
+  for(Entity *e : _moving_entities)
+    if(bounds->contains(position, e->region->position))
+      out.push_back(e);
+  for(Entity *e : _other_entities)
+    if(bounds->contains(position, e->region->position))
+      out.push_back(e);
   return out;
 }
-
-#undef ThroughVector
 
 void World::spawn(Entity* e) {
   _other_entities.push_back(e);
@@ -30,4 +27,8 @@ void World::spawn(MovingEntity* e) {
 
 std::vector<MovingEntity*>* World::moving_entities() {
   return &_moving_entities;
+}
+
+Map* World::map() {
+  return &_map;
 }
