@@ -7,13 +7,6 @@
 Entity::Entity(Region* region) :
   region(region) {}
 
-void Entity::translate(double dx, double dy) {
-  region->position = region->position + Vec2(dx, dy);
-}
-void Entity::translate(Vec2 v) {
-  region->position = region->position + v;
-}
-
 std::ostream& operator<<(std::ostream& os, Entity const& e) {
   return os << e.region;
 }
@@ -21,17 +14,22 @@ std::ostream& operator<<(std::ostream& os, Entity const& e) {
 MovingEntity::MovingEntity(Region* region) :
   Entity(region) {}
 
-Player::Player(PolygonRegion* region) :
+
+
+Player::Player(PolygonRegion* region, double max_health) :
   MovingEntity(region),
-  region(region) {}
+  region(region) {
+  this->max_health = max_health;
+  this->health = max_health;
+}
 
 void Player::move(double duration) {
-  translate(velocity * duration);
+  region->position = region->position + velocity * duration;
 }
 
 Bullet::Bullet(Region* region) :
   MovingEntity(region) {}
 
 void Bullet::move(double duration) {
-  translate(velocity * duration);
+  region->position = region->position + velocity * duration;
 }

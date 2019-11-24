@@ -2,16 +2,37 @@
 #include "world.hpp"
 #include "bounds.hpp"
 #include "entity.hpp"
-#include <iostream>
 
-Spell::Spell(World* world, Spell::Type _type) : world(world), _type(_type) {}
-
-void Spell::use(Entity* caster, double x, double y) {
-  auto ents = world->entities_in_area({-1, -1}, new RectangularBounds(Vec2(2, 2)));
-  for(auto e : ents)
-    e->region->position = {x, y};
+Spell::Spell(World* world,
+             Spell::Type type,
+             std::vector<Effect*> effects,
+             double cooldown) :
+  world(world),
+  type(type),
+  effects(effects),
+  cooldown(cooldown) {
+  projectile = {NULL,
+                &effects,
+                Vec2::zero,
+                {20, 0},
+                {0, 0}};
 }
 
-Spell::Type Spell::type() {
-  return _type;
+void Spell::use(Entity* caster, Vec2 target) {
+  switch(type) {
+  case SELF:
+    world->apply_effects(&effects, caster, target);
+    break;
+  case PROJECTILE: {
+    Projectile p = projectile;
+    p.source = caster;
+    p.position = caster->region->position;
+    p.velocity = // projectile.velocity.x *
+      Vec2::normalize(target - caster->region->position);
+    world->add_projectile(projectile);
+  }
+    break;
+  default:
+    break;
+  }
 }

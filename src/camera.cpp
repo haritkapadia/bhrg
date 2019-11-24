@@ -11,13 +11,15 @@ Camera::Camera(World* _world,
   SCREEN_HEIGHT(SCREEN_HEIGHT) {}
 
 void Camera::zoom(double scale) {
-  region->bounds()->scale(scale);
+  region->bounds()->scale(1/scale);
 }
 
 // https://www.desmos.com/calculator/jvd4ny5zxa
 SDL_Point Camera::screen_transform(Position p) {
-  double x = *SCREEN_WIDTH * ((p.x - region->position.x) / region->bounds()->size().x + 0.5);
-  double y = *SCREEN_HEIGHT * (0.5 - (p.y - region->position.y) / region->bounds()->size().y);
+  double x = *SCREEN_WIDTH * ((p.x - region->position.x) /
+                              region->bounds()->size().x + 0.5);
+  double y = *SCREEN_HEIGHT * (0.5 - (p.y - region->position.y) /
+                               region->bounds()->size().y);
   return
     {
      (int)(x),
@@ -25,9 +27,13 @@ SDL_Point Camera::screen_transform(Position p) {
     };
 }
 
-SDL_Rect Camera::screen_transform(Position p, Bounds* b) {
-  double x = *SCREEN_WIDTH * ((p.x - region->position.x) / region->bounds()->size().x + 0.5);
-  double y = *SCREEN_HEIGHT * (0.5 - (p.y - region->position.y) / region->bounds()->size().y);
+SDL_Rect Camera::screen_transform(Region* _region) {
+  Position p = _region->position;
+  Bounds* b = _region->bounds();
+  double x = *SCREEN_WIDTH * ((p.x - region->position.x) /
+                              region->bounds()->size().x + 0.5);
+  double y = *SCREEN_HEIGHT * (0.5 - (p.y - region->position.y) /
+                               region->bounds()->size().y);
   double w = *SCREEN_WIDTH / region->bounds()->size().x * b->size().x;
   double h = *SCREEN_HEIGHT / region->bounds()->size().y * b->size().y;
   return

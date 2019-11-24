@@ -15,6 +15,7 @@
 #include "entity.hpp"
 #include "world.hpp"
 #include "spell.hpp"
+#include "effect.hpp"
 #include "camera.hpp"
 #include "map.hpp"
 #include "vec.hpp"
@@ -169,9 +170,16 @@ int main(int argc, char* argv[]) {
   World world;
   Map* map = world.map();
   map->read("dabb.map");
-  Player player = Player(new PolygonRegion(Vec2(0, 0), new RectangularBounds(Vec2(1, 1))));
+  Player player = Player(new PolygonRegion({0, 0},
+                                           new RectangularBounds({1, 1})),
+                         100);
   world.spawn(&player);
-  Spell relocate = Spell(&world, Spell::Type::TARGET);
+
+
+  Spell teleport = Spell(&world, Spell::SELF, {new Teleport()}, 1);
+  Spell hurt = Spell(&world, Spell::SELF, {new Damage(10)}, 1);
+  Spell fire = Spell(&world, Spell::PROJECTILE, {new Damage(10)}, 1);
+
   prev_ticks = SDL_GetTicks();
   Camera camera = Camera(&world,
                          Vec2(0, 0),
@@ -195,12 +203,9 @@ int main(int argc, char* argv[]) {
     while(SDL_PollEvent(&e) != 0) {
       if(e.type == SDL_MOUSEWHEEL) {
         if(e.wheel.y < 0) {
-          // increasing the bound size zooms out
-          // this makes the zoom factor a little counter-intuitive
-          camera.zoom(1.25);
-        } else if(e.wheel.y > 0) {
-          // shrinking the bound size zooms in
           camera.zoom(0.8);
+        } else if(e.wheel.y > 0) {
+          camera.zoom(1.25);
         }
       }
       if(e.type == SDL_KEYDOWN && e.key.repeat == 0) {
@@ -220,31 +225,35 @@ int main(int argc, char* argv[]) {
           player.velocity.x += -10;
           break;
         case SDLK_d:
-          player.velocity.y += 10;
+          player.velocity.x += 10;
+          break;
           // adjust camera position using arrow keys
-          // uses translate instead of velocity because
-          // the camera should not be controlled by the player anyways
         case SDLK_UP:
-          camera.translate(0, camera.region->bounds()->size().y / 10);
+          camera.region->position.y += camera.region->bounds()->size().y / 10;
           break;
         case SDLK_DOWN:
-          camera.translate(0, -camera.region->bounds()->size().y / 10);
+          camera.region->position.y += -camera.region->bounds()->size().y / 10;
           break;
         case SDLK_LEFT:
-          camera.translate(-camera.region->bounds()->size().x / 10, 0);
+          camera.region->position.x += -camera.region->bounds()->size().x / 10;
           break;
         case SDLK_RIGHT:
-          camera.translate(camera.region->bounds()->size().x / 10, 0);
-          break;
-          // uses the temporarily designed spell
-        case SDLK_PERIOD:
-          relocate.use(&player, target_x, target_y);
+          camera.region->position.x += camera.region->bounds()->size().x / 10;
           break;
           // toggles grid
         case SDLK_g:
           show_grid = !show_grid;
           break;
           // fires a bullet starting at the player
+        case SDLK_1:
+          teleport.use(&player, {target_x, target_y});
+          break;
+        case SDLK_2:
+          hurt.use(&player, Vec2::zero);
+          break;
+        case SDLK_3:
+          fire.use(&player, {target_x, target_y});
+          break;
         case SDLK_SPACE:
           {
             Bullet* b = new Bullet(new Region(player.region->position,
@@ -270,7 +279,7 @@ int main(int argc, char* argv[]) {
           player.velocity.x -= -10;
           break;
         case SDLK_d:
-          player.velocity.y -= 10;
+          player.velocity.x -= 10;
         default:
           break;
         }
@@ -299,18 +308,22 @@ int main(int argc, char* argv[]) {
     }
 
     
-    // moves all entities in the world
-    for(MovingEntity* e : *world.moving_entities())
-      e->move((curr_ticks - prev_ticks) / 1000.0);
-
+    // moves all entities and projectiles in the world
+    {
+      double duration = (curr_ticks - prev_ticks) / 1000.0;
+      for(MovingEntity* e : *world.moving_entities())
+        e->move(duration);
+      world.move_projectiles(duration);
+    }
+    
     // collision detection: player with solids
     bool collided = false;
     for(PolygonRegion* s : *map->solids()) {
       if(s->might_collide(player.region)) {
         Vec2 translation = player.region->min_translate(s);
-        if(translation.x != 0 || translation.y != 0) {
+        if(translation != Vec2::zero) {
           collided = true;
-          player.translate(translation);
+          player.region->position = player.region->position + translation;
         }
       }
     }
@@ -357,7 +370,7 @@ int main(int argc, char* argv[]) {
       // draw the first point and normal
       {
         // drawing a normal
-        Position start = vertices[0] + vertices[vertices.size() - 1] / 2;
+        Position start = (vertices[0] + vertices[vertices.size() - 1]) * 0.5;
         Position end = start + axes[0];
         SDL_Point line[2];
         line[0] = camera.screen_transform(start);
@@ -370,7 +383,7 @@ int main(int argc, char* argv[]) {
       // draw the remaining points, edges, and and normals
       for(unsigned int i = 1; i < axes.size(); i++) {
         // drawing a normal
-        Position start = vertices[i] + vertices[i - 1] / 2;
+        Position start = (vertices[i] + vertices[i - 1]) * 0.5;
         Position end = start + axes[i];
         SDL_Point line[2];
         line[0] = camera.screen_transform(start);
@@ -384,22 +397,17 @@ int main(int argc, char* argv[]) {
       points[vertices.size()] = points[0];
       SDL_RenderDrawLines(renderer, points, vertices.size() + 1);
       // drawing the "might collide" box
-      SDL_Rect rect = camera.screen_transform((*map->solids())[j]->position,
-                                              (*map->solids())[j]->bounds());
+      SDL_Rect rect = camera.screen_transform((*map->solids())[j]);
       SDL_RenderDrawRect(renderer, &rect);
     }
 
     // draw entities
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     std::vector<Entity*> entities;
-    { // get list of entities inside camera region
-      Vec2 cpos = camera.region->position;
-      Bounds* cbounds = camera.region->bounds();
-      entities = world.entities_in_area(cpos, cbounds);
-    }    
+    entities = world.entities_in_region(*camera.region);
     for(Entity* e : entities) {
       SDL_Rect rect;
-      rect = camera.screen_transform(e->region->position, e->region->bounds());
+      rect = camera.screen_transform(e->region);
       // draw the player as a red square instead of a white circle
       if(e == &player) {
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
@@ -408,6 +416,25 @@ int main(int argc, char* argv[]) {
       } else {
         fill_circle(renderer, rect.x + rect.w/2, rect.y + rect.h/2, rect.w/2);
       }
+      if(e->max_health != 0) {
+        SDL_Rect full_hp_bar = {rect.x, rect.y - 10, rect.w, 5};
+        SDL_Rect hp_bar = {rect.x, rect.y - 10,
+                           (int)(rect.w * e->health / e->max_health), 5};
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_RenderFillRect(renderer, &full_hp_bar);
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        SDL_RenderFillRect(renderer, &hp_bar);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+      }
+    }
+
+    // draw projectiles
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    for(Projectile p : *world.projectiles()) {
+      SDL_Rect rect;
+      Region* r = new Region(p.position, new CircularBounds(0.1));
+      rect = camera.screen_transform(r);
+      fill_circle(renderer, rect.x + rect.w/2, rect.y + rect.h/2, rect.w/2);
     }
 
     // finished rendering cycle

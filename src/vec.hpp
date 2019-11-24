@@ -3,6 +3,9 @@
 
 #include <ostream>
 
+/**
+ * A 2D math vector.
+ */
 class Vec2 {
 public:
   double x;
@@ -12,6 +15,10 @@ public:
   Vec2();
   static const Vec2 zero;
   static double dot(Vec2 v1, Vec2 v2);
+  /**
+   * @param v   The vector of which to find the perpendicular from.
+   * @return A vector perpendicular to every vector given.
+   */
   static Vec2 cross(Vec2 v);
   static Vec2 times(Vec2 v, double s);
   static Vec2 times(double s, Vec2 v);

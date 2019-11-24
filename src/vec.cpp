@@ -11,6 +11,7 @@ double Vec2::dot(Vec2 v1, Vec2 v2) {
   return v1.x * v2.x + v1.y * v2.y;
 }
 Vec2 Vec2::cross(Vec2 v) {
+  // Equivalent to solving 2D determinant |[i, j] , [v_x, v_y]|
   return Vec2(v.y, -v.x);
 }
 Vec2 Vec2::times(Vec2 v, double s) {

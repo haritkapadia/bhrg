@@ -1,6 +1,9 @@
 #ifndef SPELL_HPP
 #define SPELL_HPP
+
 #include "world.hpp"
+#include "effect.hpp"
+#include <vector>
 
 class Spell {
 public:
@@ -12,11 +15,13 @@ public:
     };
 private:
   World* world;
-  Type _type;
 public:
-  Spell(World*, Type);
-  void use(Entity* caster, double x, double y);
-  Type type();
+  Type type;
+  Projectile projectile;
+  std::vector<Effect*> effects;
+  double cooldown;
+  Spell(World* world, Type type, std::vector<Effect*> effects, double cooldown);
+  void use(Entity* caster, Vec2 target);
 };
 
 #endif

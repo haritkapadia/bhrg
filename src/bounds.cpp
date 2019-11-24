@@ -2,18 +2,18 @@
 #include "bounds.hpp"
 #include <cmath>
 
+// checks if N is inside the open interval (L, R)
 #define Inside(L, N, R) ((L) < (N) && (N) < (R))
+// checks if A, B, C (A, B < C) is a possible triangle
+// budget triangle inequality
 #define Pythagorean(A, B, C) ((A)*(A) + (B)*(B) < (C)*(C))
 
+// empty constructor
 CircularBounds::CircularBounds(double _radius) :
   Bounds(),
   _radius(_radius) {}
 
 GetSet(CircularBounds, double, radius);
-
-bool CircularBounds::contains(Position self, Position other) {
-  return Pythagorean(other.x - self.x, other.y - self.y, _radius);
-}
 
 void CircularBounds::scale(double factor) {
   _radius *= factor;
@@ -27,12 +27,6 @@ Vec2 CircularBounds::size() {
 RectangularBounds::RectangularBounds(Vec2 _size) :
   PolygonBounds(),
   _size(_size) {}
-
-bool RectangularBounds::contains(Position self, Position other) {
-  return
-    Inside(self.x - _size.x / 2, other.x, self.x + _size.x / 2) &&
-    Inside(self.y - _size.y / 2, other.y, self.y + _size.y / 2);
-}
 
 void RectangularBounds::scale(double factor) {
   _size = _size * factor;
@@ -56,11 +50,8 @@ ConvexBounds::ConvexBounds(std::vector<Position> _vertices, Vec2 _size) :
   _vertices(_vertices),
   _size(_size) {}
 
-bool ConvexBounds::contains(Position self, Position other) {
-  return false;
-}
-
 void ConvexBounds::scale(double factor) {
+  // temporarily unimplemented
 }
 
 Get(ConvexBounds, Vec2, size);
@@ -73,6 +64,7 @@ unsigned int ConvexBounds::count() {
 
 std::vector<Vec2> ConvexBounds::normals() {
   std::vector<Vec2> out;
+  // makes each normal by rotating a vector created from two vertices
   Vec2 v0v1 = _vertices[0] - _vertices[_vertices.size() - 1];
   out.push_back(Vec2::normalize(Vec2::cross(v0v1)));
   for(unsigned int i = 1; i < _vertices.size(); i++) {

@@ -92,9 +92,9 @@ int main(int argc, char* argv[]) {
         vertices_size += 1;
       } else if(e.type == SDL_MOUSEWHEEL) {
         if(e.wheel.y < 0) {
-          camera.zoom(1.25);
-        } else if(e.wheel.y > 0) {
           camera.zoom(0.8);
+        } else if(e.wheel.y > 0) {
+          camera.zoom(1.25);
         }
       } else if(e.type == SDL_KEYDOWN && e.key.repeat == 0) {
         switch(e.key.keysym.sym) {
