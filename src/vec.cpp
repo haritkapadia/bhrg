@@ -33,6 +33,9 @@ Vec2 Vec2::subtract(Vec2 v1, Vec2 v2) {
 bool Vec2::equal(Vec2 v1, Vec2 v2) {
   return v1.x == v2.x && v1.y == v2.y;
 }
+double Vec2::length(Vec2 v) {
+  return std::sqrt(v.x * v.x + v.y * v.y);
+}
 
 Vec2 operator*(const Vec2& v1, const double s) {
   return Vec2::times(v1, s);

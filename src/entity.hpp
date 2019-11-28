@@ -2,63 +2,72 @@
 #define ENTITY_HPP
 
 #include <ostream>
+#include <bitset>
+#include <stack>
 #include "bounds.hpp"
 #include "class_util.hpp"
 #include "vec.hpp"
 #include "region.hpp"
 
-/**
- * A unique object in the world occupying a region and containing special data.
- */
+class Effect;
+
 class Entity {
 public:
-  Region* region;
-  bool alive = false;
-  double max_health = 0;
-  double health = 0;
-  /**
-   * @param region   The region that the entity occupies.
-   */
-  Entity(Region* region);
+  enum Components
+    {
+     NONE,
+     LIVES,
+     MOVES,
+     OCCUPIES,
+     COMP_COUNT
+    };
+  struct Lives {
+    bool alive;
+    double max_health;
+    double health;
+    void damage(double dh) {
+      health -= dh;
+      if(health < 0)
+        alive = false;
+    }
+    void heal(double dh) {
+      health += dh;
+      if(health > max_health)
+        health = max_health;
+      else if(health < 0)
+        alive = false;
+    }
+  };
+  struct Moves {
+    Vec2 velocity;
+    double terminal;
+    void accelerate(Vec2 dv) {
+      velocity = velocity + dv;
+      if(Vec2::length(velocity) < terminal)
+        velocity = Vec2::normalize(velocity) * terminal;
+    }
+  };
+  struct Occupies {
+    Region* region;
+  };
+  std::bitset<Entity::COMP_COUNT> is_comp;
+  Lives lives;
+  Moves moves;
+  Occupies occupies;
   friend std::ostream& operator<<(std::ostream& os, Entity const& e);
+  friend std::ostream& operator<<(std::ostream& os, Lives const& l);
+  friend std::ostream& operator<<(std::ostream& os, Moves const& l);
+  friend std::ostream& operator<<(std::ostream& os, Occupies const& l);
 };
 
-/**
- * An entity that moves based on time.
- */
-class MovingEntity : public Entity {
+class EntityFactory {
+private:
+  Entity e;
 public:
-  MovingEntity(Region* region);
-  /**
-   * Moves the entity based on how a duration of time.
-   *
-   * @param duration   The duration of time for which the entity moves.
-   */
-  virtual void move(double duration) = 0;
-};
-
-
-class Player : public MovingEntity {
-public:
-  PolygonRegion* region;
-  Vec2 velocity;
-  /**
-   * @param region   The region that the player occupies.
-   */
-  Player(PolygonRegion* region, double max_health);
-  virtual void move(double duration);
-};
-
-
-
-class Bullet : public MovingEntity {
-public:
-  Vec2 velocity;
-  /**
-   * @param region   The region that the bullet occupies.
-   */
-  Bullet(Region* region);
-  virtual void move(double duration);
+  EntityFactory* lives(Entity::Lives _lives);
+  EntityFactory* moves(Entity::Moves _moves);
+  EntityFactory* occupies(Entity::Occupies _occupies);
+  Entity create();
 };
 
 #endif

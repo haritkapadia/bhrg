@@ -14,8 +14,6 @@
 #include "bounds.hpp"
 #include "entity.hpp"
 #include "world.hpp"
-#include "spell.hpp"
-#include "effect.hpp"
 #include "camera.hpp"
 #include "map.hpp"
 #include "vec.hpp"
@@ -52,10 +50,10 @@ void draw_grid(SDL_Renderer* renderer, Camera* camera, int width, int height) {
   // j contains the leftmost integer grid position
   int j = 0;
   double gp = 0;
-  Vec2 camera_position = camera->region->position;
-  Vec2 camera_size = camera->region->bounds()->size();
+  Vec2 camera_position = camera->occupies.region->position;
+  Vec2 camera_size = camera->occupies.region->bounds()->size();
   // j is calculated for width here
-  if(camera->region->position.x - camera_size.x / 2 > 0)
+  if(camera->occupies.region->position.x - camera_size.x / 2 > 0)
     j = std::ceil(camera_position.x - camera_size.x / 2);
   else
     j = 1 + std::floor(camera_position.x - camera_size.x / 2);
@@ -74,12 +72,12 @@ void draw_grid(SDL_Renderer* renderer, Camera* camera, int width, int height) {
     j = std::ceil(camera_position.y - camera_size.y / 2);
   else
     j = 1 + std::floor(camera_position.y - camera_size.y / 2);
-  // draws the horizontal lines for the grid from from the top of the scren
+  // draws the horizontal lines for the grid from the bottom of the scren
   // gp is calculated similarly as for the vertical lines
   gp = height / 2 - (height / camera_size.y) * (j - camera_position.y);
   for(int i = 0; i < camera_size.y; i++) {
     SDL_RenderDrawLine(renderer, 0, gp, width, gp);
-    gp += height / camera_size.y;
+    gp -= height / camera_size.y;
   }
 }
 
@@ -168,17 +166,20 @@ int main(int argc, char* argv[]) {
   double spb = 0;
   // The playing region is loaded here
   World world;
-  Map* map = world.map();
+  Map* map = &world.map;
   map->read("dabb.map");
-  Player player = Player(new PolygonRegion({0, 0},
-                                           new RectangularBounds({1, 1})),
-                         100);
+  // Player player = Player(new PolygonRegion({0, 0},
+  //                                         new RectangularBounds({1, 1})),
+  //                       100);
+  EntityFactory* _player = new EntityFactory();
+  Entity player = _player
+    ->lives({true, 100, 100})
+    ->moves({Vec2::zero})
+    ->occupies({new PolygonRegion(Vec2::zero, new RectangularBounds({1, 1}))})
+    ->create();
+  delete _player;
   world.spawn(&player);
 
-
-  Spell teleport = Spell(&world, Spell::SELF, {new Teleport()}, 1);
-  Spell hurt = Spell(&world, Spell::SELF, {new Damage(10)}, 1);
-  Spell fire = Spell(&world, Spell::PROJECTILE, {new Damage(10)}, 1);
 
   prev_ticks = SDL_GetTicks();
   Camera camera = Camera(&world,
@@ -194,12 +195,12 @@ int main(int argc, char* argv[]) {
     int mx, my;
     SDL_GetMouseState(&mx, &my);
     // screen mouse coordinates transformed to world coordinates
-    double target_x = (camera.region->bounds()->size().x / SCREEN_WIDTH) *
-      (mx + camera.region->position.x * SCREEN_WIDTH /
-       camera.region->bounds()->size().x - SCREEN_WIDTH / 2);
-    double target_y = (camera.region->bounds()->size().y / SCREEN_HEIGHT) *
-      (-my + camera.region->position.y * SCREEN_HEIGHT /
-       camera.region->bounds()->size().y + SCREEN_HEIGHT / 2);
+    double target_x = (camera.occupies.region->bounds()->size().x / SCREEN_WIDTH) *
+      (mx + camera.occupies.region->position.x * SCREEN_WIDTH /
+       camera.occupies.region->bounds()->size().x - SCREEN_WIDTH / 2);
+    double target_y = (camera.occupies.region->bounds()->size().y / SCREEN_HEIGHT) *
+      (-my + camera.occupies.region->position.y * SCREEN_HEIGHT /
+       camera.occupies.region->bounds()->size().y + SCREEN_HEIGHT / 2);
     while(SDL_PollEvent(&e) != 0) {
       if(e.type == SDL_MOUSEWHEEL) {
         if(e.wheel.y < 0) {
@@ -216,29 +217,29 @@ int main(int argc, char* argv[]) {
           break;
           // increases velocity upon WASD press
         case SDLK_w:
-          player.velocity.y += 10;
+          player.moves.velocity.y += 10;
           break;
         case SDLK_s:
-          player.velocity.y += -10;
+          player.moves.velocity.y += -10;
           break;
         case SDLK_a:
-          player.velocity.x += -10;
+          player.moves.velocity.x += -10;
           break;
         case SDLK_d:
-          player.velocity.x += 10;
+          player.moves.velocity.x += 10;
           break;
           // adjust camera position using arrow keys
         case SDLK_UP:
-          camera.region->position.y += camera.region->bounds()->size().y / 10;
+          camera.occupies.region->position.y += camera.occupies.region->bounds()->size().y / 10;
           break;
         case SDLK_DOWN:
-          camera.region->position.y += -camera.region->bounds()->size().y / 10;
+          camera.occupies.region->position.y += -camera.occupies.region->bounds()->size().y / 10;
           break;
         case SDLK_LEFT:
-          camera.region->position.x += -camera.region->bounds()->size().x / 10;
+          camera.occupies.region->position.x += -camera.occupies.region->bounds()->size().x / 10;
           break;
         case SDLK_RIGHT:
-          camera.region->position.x += camera.region->bounds()->size().x / 10;
+          camera.occupies.region->position.x += camera.occupies.region->bounds()->size().x / 10;
           break;
           // toggles grid
         case SDLK_g:
@@ -246,22 +247,13 @@ int main(int argc, char* argv[]) {
           break;
           // fires a bullet starting at the player
         case SDLK_1:
-          teleport.use(&player, {target_x, target_y});
+          // teleport.use(&player, {target_x, target_y});
           break;
         case SDLK_2:
-          hurt.use(&player, Vec2::zero);
+          // hurt.use(&player, Vec2::zero);
           break;
         case SDLK_3:
-          fire.use(&player, {target_x, target_y});
-          break;
-        case SDLK_SPACE:
-          {
-            Bullet* b = new Bullet(new Region(player.region->position,
-                                              new CircularBounds(0.3)));
-            // bullet speed is dependent on initial mouse proximity to player
-            b->velocity = Vec2(target_x, target_y) - b->region->position;
-            world.spawn(b);
-          }
+          // fire.use(&player, {target_x, target_y});
           break;
         default:
           break;
@@ -270,16 +262,16 @@ int main(int argc, char* argv[]) {
         switch(e.key.keysym.sym) {
           // decreases velocity upon WASD release
         case SDLK_w:
-          player.velocity.y -= 10;
+          player.moves.velocity.y -= 10;
           break;
         case SDLK_s:
-          player.velocity.y -= -10;
+          player.moves.velocity.y -= -10;
           break;
         case SDLK_a:
-          player.velocity.x -= -10;
+          player.moves.velocity.x -= -10;
           break;
         case SDLK_d:
-          player.velocity.x -= 10;
+          player.moves.velocity.x -= 10;
         default:
           break;
         }
@@ -311,19 +303,23 @@ int main(int argc, char* argv[]) {
     // moves all entities and projectiles in the world
     {
       double duration = (curr_ticks - prev_ticks) / 1000.0;
-      for(MovingEntity* e : *world.moving_entities())
-        e->move(duration);
+      for(Entity* e : world.entities) {
+        if(e->moves.velocity != Vec2::zero)
+          std::cout << "Moved: " << *e << '\n';
+        if(e->is_comp[Entity::OCCUPIES])
+          e->occupies.region->position = e->occupies.region->position + e->moves.velocity * duration;
+      }
       world.move_projectiles(duration);
     }
-    
+
     // collision detection: player with solids
     bool collided = false;
     for(PolygonRegion* s : *map->solids()) {
-      if(s->might_collide(player.region)) {
-        Vec2 translation = player.region->min_translate(s);
+      if(s->might_collide(player.occupies.region)) {
+        Vec2 translation = static_cast<PolygonRegion*>(player.occupies.region)->min_translate(s);
         if(translation != Vec2::zero) {
           collided = true;
-          player.region->position = player.region->position + translation;
+          player.occupies.region->position = player.occupies.region->position + translation;
         }
       }
     }
@@ -404,10 +400,10 @@ int main(int argc, char* argv[]) {
     // draw entities
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     std::vector<Entity*> entities;
-    entities = world.entities_in_region(*camera.region);
+    entities = world.entities_in_region(*camera.occupies.region);
     for(Entity* e : entities) {
       SDL_Rect rect;
-      rect = camera.screen_transform(e->region);
+      rect = camera.screen_transform(e->occupies.region);
       // draw the player as a red square instead of a white circle
       if(e == &player) {
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
@@ -416,10 +412,10 @@ int main(int argc, char* argv[]) {
       } else {
         fill_circle(renderer, rect.x + rect.w/2, rect.y + rect.h/2, rect.w/2);
       }
-      if(e->max_health != 0) {
+      if(e->is_comp[Entity::LIVES] != 0) {
         SDL_Rect full_hp_bar = {rect.x, rect.y - 10, rect.w, 5};
         SDL_Rect hp_bar = {rect.x, rect.y - 10,
-                           (int)(rect.w * e->health / e->max_health), 5};
+                           (int)(rect.w * e->lives.health / e->lives.max_health), 5};
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_RenderFillRect(renderer, &full_hp_bar);
         SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
@@ -430,7 +426,7 @@ int main(int argc, char* argv[]) {
 
     // draw projectiles
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    for(Projectile p : *world.projectiles()) {
+    for(Projectile p : world.projectiles) {
       SDL_Rect rect;
       Region* r = new Region(p.position, new CircularBounds(0.1));
       rect = camera.screen_transform(r);

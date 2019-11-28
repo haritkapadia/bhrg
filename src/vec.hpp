@@ -26,6 +26,7 @@ public:
   static Vec2 add(Vec2 v1, Vec2 v2);
   static Vec2 subtract(Vec2 v1, Vec2 v2);
   static bool equal(Vec2 v1, Vec2 v2);
+  static double length(Vec2 v);
   friend Vec2 operator*(const Vec2& v2, const double s);
   friend Vec2 operator*(const double s, const Vec2& v2);
   friend Vec2 operator+(const Vec2& v1, const Vec2& v2);
