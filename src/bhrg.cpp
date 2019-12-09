@@ -17,6 +17,8 @@
 #include "camera.hpp"
 #include "map.hpp"
 #include "vec.hpp"
+#include "timeline.hpp"
+#include "effect.hpp"
 
 #define SAMPLE_RATE 44100
 using namespace essentia;
@@ -128,7 +130,7 @@ int main(int argc, char* argv[]) {
     // Song is currently ignored because analysis takes 10 seconds every run
     // analyse_song(music_file, &bpm, &ticks);
     unsigned long long end = SDL_GetTicks();
-    std::cout << "Song analysis took " << (end - start) / 1000. << " seconds.\n";
+    std::cout << "Analysis took " << (end - start) / 1000. << " seconds.\n";
   }
 
 
@@ -165,21 +167,33 @@ int main(int argc, char* argv[]) {
   unsigned long long ibeat = 0;
   double spb = 0;
   // The playing region is loaded here
+  Timeline timeline;
   World world;
   Map* map = &world.map;
   map->read("dabb.map");
-  // Player player = Player(new PolygonRegion({0, 0},
-  //                                         new RectangularBounds({1, 1})),
-  //                       100);
+  
   EntityFactory* _player = new EntityFactory();
-  Entity player = _player
+  _player
     ->lives({true, 100, 100})
-    ->moves({Vec2::zero})
-    ->occupies({new PolygonRegion(Vec2::zero, new RectangularBounds({1, 1}))})
-    ->create();
+    ->moves({Vec2::zero, 10})
+    ->occupies({new PolygonRegion(Vec2::zero, new RectangularBounds({1, 1}))});
+  Entity player = _player->create();
   delete _player;
   world.spawn(&player);
+    
+  EntityFactory* _enemy = new EntityFactory();
+  _enemy
+    ->lives({true, 100, 100})
+    ->moves({Vec2::zero, 10})
+    ->occupies({new PolygonRegion({3, 3}, new RectangularBounds({3, 3}))});
+  Entity enemy = _enemy->create();
+  delete _enemy;
+  world.spawn(&enemy);
 
+
+  DamageOverTime* damage_event = new DamageOverTime({&player}, 5);
+  Speed* speed_event = new Speed({&player}, 5);
+  Teleport* teleport_event = new Teleport({&player});
 
   prev_ticks = SDL_GetTicks();
   Camera camera = Camera(&world,
@@ -187,6 +201,9 @@ int main(int argc, char* argv[]) {
                          new RectangularBounds(Vec2(10, 10)),
                          &SCREEN_WIDTH,
                          &SCREEN_HEIGHT);
+
+  bool kup, kdown, kleft, kright;
+  kup = kdown = kleft = kright = false;
   bool show_grid = false;
   // Main event loop
   while(running) {
@@ -195,12 +212,19 @@ int main(int argc, char* argv[]) {
     int mx, my;
     SDL_GetMouseState(&mx, &my);
     // screen mouse coordinates transformed to world coordinates
-    double target_x = (camera.occupies.region->bounds()->size().x / SCREEN_WIDTH) *
-      (mx + camera.occupies.region->position.x * SCREEN_WIDTH /
-       camera.occupies.region->bounds()->size().x - SCREEN_WIDTH / 2);
-    double target_y = (camera.occupies.region->bounds()->size().y / SCREEN_HEIGHT) *
-      (-my + camera.occupies.region->position.y * SCREEN_HEIGHT /
-       camera.occupies.region->bounds()->size().y + SCREEN_HEIGHT / 2);
+    Vec2 mtarget;
+    {
+      double target_x =
+        (camera.occupies.region->bounds()->size().x / SCREEN_WIDTH) *
+        (mx + camera.occupies.region->position.x * SCREEN_WIDTH /
+         camera.occupies.region->bounds()->size().x - SCREEN_WIDTH / 2);
+      double target_y =
+        (camera.occupies.region->bounds()->size().y / SCREEN_HEIGHT) *
+        (-my + camera.occupies.region->position.y * SCREEN_HEIGHT /
+         camera.occupies.region->bounds()->size().y + SCREEN_HEIGHT / 2);
+      mtarget = {target_x, target_y};
+    }
+    
     while(SDL_PollEvent(&e) != 0) {
       if(e.type == SDL_MOUSEWHEEL) {
         if(e.wheel.y < 0) {
@@ -217,61 +241,71 @@ int main(int argc, char* argv[]) {
           break;
           // increases velocity upon WASD press
         case SDLK_w:
-          player.moves.velocity.y += 10;
+          kup = true;
           break;
         case SDLK_s:
-          player.moves.velocity.y += -10;
+          kdown = true;
           break;
         case SDLK_a:
-          player.moves.velocity.x += -10;
+          kleft = true;
           break;
         case SDLK_d:
-          player.moves.velocity.x += 10;
+          kright = true;
           break;
           // adjust camera position using arrow keys
         case SDLK_UP:
-          camera.occupies.region->position.y += camera.occupies.region->bounds()->size().y / 10;
+          camera.occupies.region->position.y +=
+            camera.occupies.region->bounds()->size().y / 10;
           break;
         case SDLK_DOWN:
-          camera.occupies.region->position.y += -camera.occupies.region->bounds()->size().y / 10;
+          camera.occupies.region->position.y +=
+            -camera.occupies.region->bounds()->size().y / 10;
           break;
         case SDLK_LEFT:
-          camera.occupies.region->position.x += -camera.occupies.region->bounds()->size().x / 10;
+          camera.occupies.region->position.x +=
+            -camera.occupies.region->bounds()->size().x / 10;
           break;
         case SDLK_RIGHT:
-          camera.occupies.region->position.x += camera.occupies.region->bounds()->size().x / 10;
+          camera.occupies.region->position.x +=
+            camera.occupies.region->bounds()->size().x / 10;
           break;
           // toggles grid
         case SDLK_g:
           show_grid = !show_grid;
           break;
-          // fires a bullet starting at the player
         case SDLK_1:
-          // teleport.use(&player, {target_x, target_y});
+          timeline.add(speed_event->clone(), 0);
           break;
         case SDLK_2:
-          // hurt.use(&player, Vec2::zero);
+          timeline.add(damage_event->clone(), 2);
           break;
         case SDLK_3:
+          world.add_projectile({&player,
+                                player.occupies.region->position,
+                                {1, 1},
+                                {0, 0}});
           // fire.use(&player, {target_x, target_y});
           break;
+        case SDLK_4:
+          teleport_event->target = mtarget;
+          timeline.add(teleport_event->clone(), 0);
         default:
           break;
         }
       } else if(e.type == SDL_KEYUP && e.key.repeat == 0) {
         switch(e.key.keysym.sym) {
-          // decreases velocity upon WASD release
         case SDLK_w:
-          player.moves.velocity.y -= 10;
+          kup = false;
           break;
         case SDLK_s:
-          player.moves.velocity.y -= -10;
+          kdown = false;
           break;
         case SDLK_a:
-          player.moves.velocity.x -= -10;
+          kleft = false;
           break;
         case SDLK_d:
-          player.moves.velocity.x -= 10;
+          kright = false;
+          break;
         default:
           break;
         }
@@ -282,6 +316,31 @@ int main(int argc, char* argv[]) {
         SDL_GetWindowSize(window, &SCREEN_WIDTH, &SCREEN_HEIGHT);
       }
     }
+
+    {
+      double speed = player.moves.speed;
+      Vec2* v = &player.moves.velocity;
+      if(!(kleft ^ kright)) {
+        v->x = 0;
+      } else if(kleft) {
+        v->x -= 1;
+      } else if(kright) {
+        v->x += 1;
+      }
+      if(!(kup ^ kdown)) {
+        v->y = 0;
+      } else if(kdown) {
+        v->y -= 1;
+      } else if(kup) {
+        v->y += 1;
+      }
+      if(*v != Vec2::zero)
+        *v = Vec2::normalize(*v) * speed;
+    }
+
+    timeline.update_now(curr_ticks - start);
+    timeline.process();
+
 
     // change colour of beat box based on bpm
     unsigned long long now = SDL_GetTicks() - start;
@@ -302,24 +361,26 @@ int main(int argc, char* argv[]) {
     
     // moves all entities and projectiles in the world
     {
-      double duration = (curr_ticks - prev_ticks) / 1000.0;
       for(Entity* e : world.entities) {
         if(e->moves.velocity != Vec2::zero)
-          std::cout << "Moved: " << *e << '\n';
+          // std::cout << "Moved: " << *e << '\n';
         if(e->is_comp[Entity::OCCUPIES])
-          e->occupies.region->position = e->occupies.region->position + e->moves.velocity * duration;
+          e->occupies.region->position = e->occupies.region->position +
+            e->moves.velocity * timeline.diff();
       }
-      world.move_projectiles(duration);
+      world.move_projectiles(timeline.diff());
     }
 
     // collision detection: player with solids
     bool collided = false;
     for(PolygonRegion* s : *map->solids()) {
       if(s->might_collide(player.occupies.region)) {
-        Vec2 translation = static_cast<PolygonRegion*>(player.occupies.region)->min_translate(s);
+        Vec2 translation =
+          static_cast<PolygonRegion*>(player.occupies.region)->min_translate(s);
         if(translation != Vec2::zero) {
           collided = true;
-          player.occupies.region->position = player.occupies.region->position + translation;
+          player.occupies.region->position = player.occupies.region->position +
+            translation;
         }
       }
     }
@@ -414,8 +475,10 @@ int main(int argc, char* argv[]) {
       }
       if(e->is_comp[Entity::LIVES] != 0) {
         SDL_Rect full_hp_bar = {rect.x, rect.y - 10, rect.w, 5};
-        SDL_Rect hp_bar = {rect.x, rect.y - 10,
-                           (int)(rect.w * e->lives.health / e->lives.max_health), 5};
+        SDL_Rect hp_bar = {rect.x,
+                           rect.y - 10,
+                           (int)(rect.w * e->lives.health/e->lives.max_health),
+                           5};
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_RenderFillRect(renderer, &full_hp_bar);
         SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);

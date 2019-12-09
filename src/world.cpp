@@ -62,7 +62,7 @@ void World::move_projectiles(double duration) {
     bool hitp = false;
     p->velocity = p->velocity + p->acceleration * duration;
     p->position = p->position + p->velocity * duration;
-    for(Entity* e : entities_in_region({{0, 0}, new RectangularBounds({2, 2})})) {
+    for(Entity* e : entities) {
       if(e != p->source) {
         Vec2 dist = e->occupies.region->position - p->position;
         if(Vec2::dot(dist, dist) < std::pow(e->occupies.region->bounds()->size().x, 2)) {

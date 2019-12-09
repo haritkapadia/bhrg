@@ -1,6 +1,7 @@
 #ifndef ENTITY_HPP
 #define ENTITY_HPP
 
+#include <iostream>
 #include <ostream>
 #include <bitset>
 #include <stack>
@@ -9,13 +10,10 @@
 #include "vec.hpp"
 #include "region.hpp"
 
-class Effect;
-
 class Entity {
 public:
   enum Components
     {
-     NONE,
      LIVES,
      MOVES,
      OCCUPIES,
@@ -40,12 +38,7 @@ public:
   };
   struct Moves {
     Vec2 velocity;
-    double terminal;
-    void accelerate(Vec2 dv) {
-      velocity = velocity + dv;
-      if(Vec2::length(velocity) < terminal)
-        velocity = Vec2::normalize(velocity) * terminal;
-    }
+    double speed;
   };
   struct Occupies {
     Region* region;
