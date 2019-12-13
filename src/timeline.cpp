@@ -17,6 +17,7 @@ std::ostream& operator<<(std::ostream& os, Event const& e) {
 
 void Timeline::process() {
   double elapsed = Stopwatch::elapsed();
+  std::cout << "Elapsed: " << elapsed << '\n';
   // For each event currently running, act
   // If the the event is done, make sure to pass act(1.0), then remove
   for(auto et = present.begin(); et != present.end();) {
@@ -30,6 +31,7 @@ void Timeline::process() {
     // swap with last element and pop last element
     // in present, order does not matter and is not preserved
     if(destroy) {
+      std::cout << "Destroying an event at " << action_progress << '\n';
       std::swap(*et, *(present.end() - 1));
       present.pop_back();
     } else {
@@ -38,7 +40,7 @@ void Timeline::process() {
   }
   // Add events that have reached the present to the running events
   Event* e;
-  while(!future.empty() &&(e = future.top())->start < elapsed) {
+  while(!future.empty() && (e = future.top())->start < elapsed) {
     future.pop();
     e->act(0);
     // instant events have 0 duration

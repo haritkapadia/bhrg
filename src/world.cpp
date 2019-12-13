@@ -7,13 +7,20 @@
 #include <iostream>
 #include <cmath>
 
+HitCooldown::HitCooldown(Entity* e, Projectile* p) : Event(0, 0), e(e), p(p) {}
+
+void HitCooldown::act(double progress) {
+  // p->blacklist.erase(e);
+}
+
+
 World::World() {}
 
-std::vector<Entity*> World::entities_in_region(Region region) {
+std::vector<Entity*> World::entities_in_region(Region* region) {
   std::vector<Entity*> out;
   for(Entity* e : entities)
     if(e->is_comp[Entity::OCCUPIES])
-      if(region.might_collide(e->occupies.region))
+      if(region->might_collide(e->occupies.region))
         out.push_back(e);
   return out;
 }
@@ -23,7 +30,6 @@ std::vector<Entity*> World::entities_in_region(Region region) {
 // void World::process_effects() {
 //   for(auto et = effect_targets.begin(); et != effect_targets.end();) {
 //     Effect* effect = et->first;
-//     std::cout << *effect << '\n';
 //     switch(effect->state) {
 //     case Effect::READY:
 //       std::for_each(et->second.begin(), et->second.end(),
@@ -60,20 +66,34 @@ void World::add_projectile(Projectile projectile) {
 void World::move_projectiles(double duration) {
   for(auto p = projectiles.begin(); p != projectiles.end();) {
     bool hitp = false;
-    p->velocity = p->velocity + p->acceleration * duration;
-    p->position = p->position + p->velocity * duration;
+    if(p->target != NULL)
+      p->velocity = Vec2::normalize(*p->target - p->position) * p->speed;
+    p->position = p->position + p->velocity * duration * p->speed;
     for(Entity* e : entities) {
-      if(e != p->source) {
+      if(e != p->source /*&& p->blacklist.find(e) == p->blacklist.end()*/) {
         Vec2 dist = e->occupies.region->position - p->position;
-        if(Vec2::dot(dist, dist) < std::pow(e->occupies.region->bounds()->size().x, 2)) {
+        if(Vec2::dot(dist, dist) < std::pow(e->occupies.region->bounds()->size().x / 2, 2)) {
+          for(Effect* ef : *p->on_hit) {
+            ef->targets = {e};
+            timeline.add(ef->clone(), 0);
+            // if(p->hit_cooldown > 0) {
+            //   p->blacklist.insert(e);
+            //   timeline.add(new HitCooldown(e, &*p), p->hit_cooldown);
+            // }
+          }
           hitp = true;
           break;
         }
       }
     }
-    if(hitp)
-      p = projectiles.erase(p);
-    else
+    if(hitp && p->max_hit >= 0) {
+      p->max_hit -= 1;
+      if(p->max_hit == 0)
+        p = projectiles.erase(p);
+      else
+        p++;
+    } else {
       p++;
+    }
   }
 }

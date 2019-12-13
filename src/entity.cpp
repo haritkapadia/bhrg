@@ -1,6 +1,13 @@
 #include "entity.hpp"
 #include <iostream>
 
+void Entity::move(double duration) {
+  if(moves.velocity == Vec2::zero)
+    return;
+  // std::cout << duration << " - Moved " << name << ": " << moves.speed * duration * moves.velocity << '\n';
+  Vec2* p = &occupies.region->position;
+  *p = *p + moves.speed * duration * moves.velocity;
+}
 
 
 std::ostream& operator<<(std::ostream& os, Entity const& e) {

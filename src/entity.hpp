@@ -44,9 +44,11 @@ public:
     Region* region;
   };
   std::bitset<Entity::COMP_COUNT> is_comp;
+  std::string name = "baf";
   Lives lives;
   Moves moves;
   Occupies occupies;
+  void move(double duration);
   friend std::ostream& operator<<(std::ostream& os, Entity const& e);
   friend std::ostream& operator<<(std::ostream& os, Lives const& l);
   friend std::ostream& operator<<(std::ostream& os, Moves const& l);

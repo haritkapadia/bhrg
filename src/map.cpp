@@ -4,6 +4,8 @@
 #include <iostream>
 #include <fstream>
 
+#define NO_MAP_DEBUG
+
 std::vector<PolygonRegion*>* Map::solids() {
   return &_solids;
 }
@@ -15,7 +17,9 @@ void Map::read(std::string filename) {
   fin.open(filename, std::ios_base::binary);
   // reads the number of solids in the map
   fin.read((char*)&solid_count, sizeof(unsigned int));
+#ifdef MAP_DEBUG
   std::cout << "Solids: " << solid_count << "\n\n";
+#endif
   // allocates space for the solids
   _solids.reserve(solid_count);
   // reads and adds each solid
@@ -31,25 +35,33 @@ void Map::read(std::string filename) {
     fin.read((char*)&size.x, sizeof(double));
     fin.read((char*)&size.y, sizeof(double));
     std::vector<Position> vertices;
+#ifdef MAP_DEBUG
     std::cout << "Region " << i << " with " << vertex_count << ":\t"
               << center.x << ' ' << center.y << '\n';
+#endif
     vertices.reserve(vertex_count);
     // get vertices, assumed to be in counterclockwise order
     for(unsigned int j = 0; j < vertex_count; j++) {
       Position vertex;
       fin.read((char*)&vertex.x, sizeof(double));
       fin.read((char*)&vertex.y, sizeof(double));
+#ifdef MAP_DEBUG
       std::cout << "Vertex " << j << ":\t"
                 << vertex.x << ' ' << vertex.y << '\n';
+#endif
       vertices.push_back(vertex);
     }
+#ifdef MAP_DEBUG
     std::cout << '\n';
+#endif
     // add solid to map
     _solids.push_back(new PolygonRegion(center,
                                         new ConvexBounds(vertices, size)));
   }
   fin.close();
+#ifdef MAP_DEBUG
   std::cout << "Done\n";
+#endif
 }
 
 // TODO Change static_cast to support all PolygonBounds

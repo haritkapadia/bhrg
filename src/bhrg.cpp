@@ -19,6 +19,7 @@
 #include "vec.hpp"
 #include "timeline.hpp"
 #include "effect.hpp"
+#include "spell.hpp"
 
 #define SAMPLE_RATE 44100
 using namespace essentia;
@@ -167,8 +168,8 @@ int main(int argc, char* argv[]) {
   unsigned long long ibeat = 0;
   double spb = 0;
   // The playing region is loaded here
-  Timeline timeline;
   World world;
+  Timeline* timeline = &world.timeline;
   Map* map = &world.map;
   map->read("dabb.map");
   
@@ -180,20 +181,48 @@ int main(int argc, char* argv[]) {
   Entity player = _player->create();
   delete _player;
   world.spawn(&player);
+  player.name = "player";
     
   EntityFactory* _enemy = new EntityFactory();
   _enemy
-    ->lives({true, 100, 100})
+    ->lives({true, 200, 200})
     ->moves({Vec2::zero, 10})
     ->occupies({new PolygonRegion({3, 3}, new RectangularBounds({3, 3}))});
   Entity enemy = _enemy->create();
   delete _enemy;
   world.spawn(&enemy);
+  enemy.name = "enemy";
 
 
   DamageOverTime* damage_event = new DamageOverTime({&player}, 5);
-  Speed* speed_event = new Speed({&player}, 5);
+  Spell damage_spell;
+  damage_spell.type = Spell::PROJECTILE;
+  damage_spell.effects = {damage_event, new Speed({&enemy}, 5, 0.1)};
+  damage_spell.source = &player;
+  Speed* speed_event = new Speed({&player}, 5, 3);
+  Spell speed_spell;
+  speed_spell.type = Spell::SELF;
+  speed_spell.effects = {speed_event};
+  speed_spell.source = &player;
   Teleport* teleport_event = new Teleport({&player});
+  Spell teleport_spell;
+  teleport_spell.type = Spell::POINT_TARGET;
+  teleport_spell.effects = {teleport_event};
+  teleport_spell.source = &player;
+
+  class A : public Event {
+  public:
+    Entity* e;
+    A(Entity* e, double duration) : Event(0, duration), e(e) {}
+    virtual void act(double progress) {
+      if(progress == 0) {
+        e->moves.velocity = {1, 0};
+      } else if(progress == 1) {
+        e->moves.velocity = Vec2::zero;
+      }
+    }
+  };
+  A* enemy_move_event = new A(&enemy, 10);
 
   prev_ticks = SDL_GetTicks();
   Camera camera = Camera(&world,
@@ -205,6 +234,8 @@ int main(int argc, char* argv[]) {
   bool kup, kdown, kleft, kright;
   kup = kdown = kleft = kright = false;
   bool show_grid = false;
+  timeline->start(SDL_GetTicks());
+  timeline->add(enemy_move_event, 3);
   // Main event loop
   while(running) {
     curr_ticks = SDL_GetTicks();
@@ -274,21 +305,16 @@ int main(int argc, char* argv[]) {
           show_grid = !show_grid;
           break;
         case SDLK_1:
-          timeline.add(speed_event->clone(), 0);
+          damage_spell.region->position = mtarget;
+          damage_spell.use(&world);
           break;
         case SDLK_2:
-          timeline.add(damage_event->clone(), 2);
+          speed_spell.use(&world);
           break;
         case SDLK_3:
-          world.add_projectile({&player,
-                                player.occupies.region->position,
-                                {1, 1},
-                                {0, 0}});
-          // fire.use(&player, {target_x, target_y});
+          teleport_spell.region->position = mtarget;
+          teleport_spell.use(&world);
           break;
-        case SDLK_4:
-          teleport_event->target = mtarget;
-          timeline.add(teleport_event->clone(), 0);
         default:
           break;
         }
@@ -318,7 +344,6 @@ int main(int argc, char* argv[]) {
     }
 
     {
-      double speed = player.moves.speed;
       Vec2* v = &player.moves.velocity;
       if(!(kleft ^ kright)) {
         v->x = 0;
@@ -334,12 +359,11 @@ int main(int argc, char* argv[]) {
       } else if(kup) {
         v->y += 1;
       }
-      if(*v != Vec2::zero)
-        *v = Vec2::normalize(*v) * speed;
+      *v = Vec2::normalize(*v);
     }
 
-    timeline.update_now(curr_ticks - start);
-    timeline.process();
+    timeline->update_now(SDL_GetTicks());
+    timeline->process();
 
 
     // change colour of beat box based on bpm
@@ -362,13 +386,10 @@ int main(int argc, char* argv[]) {
     // moves all entities and projectiles in the world
     {
       for(Entity* e : world.entities) {
-        if(e->moves.velocity != Vec2::zero)
-          // std::cout << "Moved: " << *e << '\n';
-        if(e->is_comp[Entity::OCCUPIES])
-          e->occupies.region->position = e->occupies.region->position +
-            e->moves.velocity * timeline.diff();
+        if(e->is_comp[Entity::MOVES])
+          e->move(timeline->diff());
       }
-      world.move_projectiles(timeline.diff());
+      world.move_projectiles(timeline->diff());
     }
 
     // collision detection: player with solids
@@ -461,7 +482,7 @@ int main(int argc, char* argv[]) {
     // draw entities
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     std::vector<Entity*> entities;
-    entities = world.entities_in_region(*camera.occupies.region);
+    entities = world.entities_in_region(camera.occupies.region);
     for(Entity* e : entities) {
       SDL_Rect rect;
       rect = camera.screen_transform(e->occupies.region);

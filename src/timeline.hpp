@@ -12,8 +12,9 @@ public:
   double duration;
   Event(double start, double duration);
   virtual void act(double progress) = 0;
-  friend bool operator<(Event const& l,Event const& r);
+  friend bool operator<(Event const& l, Event const& r);
   friend std::ostream& operator<<(std::ostream& os, Event const& e);
+  std::string name = "blank";
 };
 
 class Timeline : public Stopwatch {
