@@ -1,3 +1,8 @@
+// UNORDERED_SET IN WORLD PROJECTILES KILLS THE PROGRAM AHHHH!!!!
+
+
+
+
 #include <iostream>
 #include <cstring>
 #include <cstdlib>
@@ -509,7 +514,7 @@ int main(int argc, char* argv[]) {
     }
 
     // draw projectiles
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_SetRenderDrawColor(renderer, 25, 80, 255, 255);
     for(Projectile p : world.projectiles) {
       SDL_Rect rect;
       Region* r = new Region(p.position, new CircularBounds(0.1));

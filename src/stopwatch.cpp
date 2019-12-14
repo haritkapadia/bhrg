@@ -31,11 +31,11 @@ void Stopwatch::update_now(unsigned long long _now) {
   now = _now;
   if(paused)
     total_paused += now - prev;
-  std::cout << "Update: " << start_time << ','
-            << now << ','
-            << total_paused << ','
-            << now - start_time << ','
-            << (now - start_time + total_paused) / 1000.0 << '\n';
+  // std::cout << "Update: " << start_time << ','
+  //           << now << ','
+  //           << total_paused << ','
+  //           << now - start_time << ','
+  //           << (now - start_time + total_paused) / 1000.0 << '\n';
 }
 
 double Stopwatch::elapsed() {

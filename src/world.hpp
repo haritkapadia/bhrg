@@ -2,6 +2,7 @@
 #define WORLD_HPP
 
 #include <vector>
+#include <set>
 #include <unordered_set>
 #include <functional>
 #include "entity.hpp"
@@ -13,6 +14,7 @@
 struct Projectile {
   Entity* source;
   Position position;
+  // this is actually just a direction, it is then multiplied by speed
   Vec2 velocity;
   double speed;
   // if target is non-null, velocity will be adjusted
@@ -20,17 +22,18 @@ struct Projectile {
   Vec2* target = NULL;
   int max_hit = 1;
   std::vector<Effect*>* on_hit;
-  // std::unordered_set<Entity*> blacklist = {};
-  double hit_cooldown = 0.5;
+  // this should probably be a set, but i keep getting segfaults when using sets :(
+  std::vector<unsigned int> prev_hit = {};
 };
 
-class HitCooldown : public Event {
-public:
-  Entity* e;
-  Projectile* p;
-  HitCooldown(Entity* e, Projectile* p);
-  virtual void act(double progress);
-};
+// class HitCooldown : public Event {
+// public:
+//   unsigned int e_idx;
+//   Projectile* p;
+//   int i;
+//   HitCooldown(unsigned int e_idx, Projectile* p, int i);
+//   virtual void act(double progress);
+// };
 
 class World {
 public:
