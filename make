@@ -1,3 +1,2 @@
 #!/bin/bash
-cd build
-make "$@"
+make --directory=build --makefile=linux.Makefile "$@"
