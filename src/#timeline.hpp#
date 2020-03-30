@@ -18,6 +18,11 @@ class Event {
     std::string name = "blank";
 };
 
+template <typename T : Entity>
+class SpawnEvent {
+    
+};
+
 class Timeline : public Stopwatch {
   public:
     std::priority_queue<Event *> future;

@@ -5,8 +5,7 @@
 #include <queue>
 #include <vector>
 
-Event::Event(double start, double duration)
-    : start(start), duration(duration) {}
+Event::Event(double start, double duration) : start(start), duration(duration) {}
 
 bool operator<(const Event &l, const Event &r) { return l.start < r.start; }
 

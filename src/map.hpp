@@ -3,7 +3,8 @@
 
 #include "bounds.hpp"
 #include "region.hpp"
-#include <string>
+#include <istream>
+#include <ostream>
 #include <vector>
 
 /**
@@ -21,15 +22,15 @@ class Map {
     /**
      * Reads a map from a file created by write().
      *
-     * @param filename   The name of the map file.
+     * @param fin   The input stream containing the map.
      */
-    void read(std::string filename);
+    void read(std::istream *fin);
     /**
      * Writes a map file to be parsed by read().
      *
-     * @param filename   The name of the map file.
+     * @param fout   The output stream to which to write the map
      */
-    void write(std::string filename);
+    void write(std::ostream *filename);
 };
 
 #endif

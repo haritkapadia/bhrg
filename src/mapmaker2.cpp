@@ -2,13 +2,12 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
+#include <SDL2/SDL_ttf.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-// #include <essentia/algorithmfactory.h>
-// #include <essentia/pool.h>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -36,6 +35,9 @@
  * @param cy         The screen y-coordinate of the center of the circle.
  * @param radius     The radius of the circle in pixels
  */
+
+TTF_Font *FONT = NULL;
+
 void fill_circle(SDL_Renderer *renderer, int cx, int cy, int radius) {
     for (int i = -radius; i <= radius; i++) {
         int height = std::sqrt(radius * radius - i * i);
@@ -86,34 +88,49 @@ void draw_grid(SDL_Renderer *renderer, Camera *camera, int width, int height) {
     }
 }
 
-// undocumented function
-// This function will likely be rewritten and moved to a different file
-// Analyses song using essentia, specifically finding beat markings and bpm
-/*
-void analyse_song(std::string filename, Real *bpm, std::vector<Real> *ticks) {
-    standard::AlgorithmFactory &factory =
-        standard::AlgorithmFactory::instance();
-    standard::Algorithm *audio = factory.create(
-        "MonoLoader", "filename", filename, "sampleRate", SAMPLE_RATE);
-    standard::Algorithm *rhythm_extractor =
-        factory.create("RhythmExtractor2013");
-    std::vector<Real> audio_buffer;
-    essentia::Real confidence;
-    std::vector<Real> estimates;
-    std::vector<Real> bpm_intervals;
-    audio->output("audio").set(audio_buffer); // acquire audio stream from file
-    audio->compute();
-    rhythm_extractor->input("signal").set(audio_buffer); // set input stream
-    rhythm_extractor->output("bpm").set(*bpm);           // set output streams
-    rhythm_extractor->output("ticks").set(*ticks);
-    rhythm_extractor->output("confidence").set(confidence);
-    rhythm_extractor->output("estimates").set(estimates);
-    rhythm_extractor->output("bpmIntervals").set(bpm_intervals);
-    rhythm_extractor->compute(); // get values and get out
-    delete audio;
-    delete rhythm_extractor;
+void write_text(SDL_Renderer *renderer, int x, int y, SDL_Color color, std::string text) {
+    SDL_Surface *s = TTF_RenderText_Solid(FONT, text.c_str(), color);
+    SDL_Texture *t = SDL_CreateTextureFromSurface(renderer, s);
+    SDL_Rect r = {x, y, s->w, s->h};
+    SDL_RenderCopy(renderer, t, NULL, &r);
 }
-*/
+
+void draw_timeline(SDL_Renderer *renderer, Timeline *timeline, SDL_Rect bounds, double framewidth,
+                   double start, double interval) {
+    SDL_Rect rect = bounds;
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderFillRect(renderer, &rect);
+    SDL_SetRenderDrawColor(renderer, 0x64, 0xb5, 0xf6, 255);
+    rect = {bounds.x, bounds.y, bounds.w, 15};
+    SDL_RenderFillRect(renderer, &rect);
+    for (double i = std::fmod(start + std::fmod(start, interval), interval); i < framewidth;
+         i += interval) {
+        int line_x = (int)(bounds.x + i * (bounds.w / framewidth));
+        SDL_RenderDrawLine(renderer, line_x, bounds.y, line_x, bounds.y + bounds.h);
+        // I would use std::to_string but that function is broken on my MinGW compiler
+        char numtext[31];
+        std::sprintf(numtext, "%.3f", start + i);
+        write_text(renderer, line_x, bounds.y, {0, 0, 0}, numtext);
+    }
+    SDL_SetRenderDrawColor(renderer, 0xe3, 0x33, 0x71, 255);
+    {
+        int line_x = (int)(bounds.x + (timeline->elapsed() - start) * (bounds.w / framewidth));
+        SDL_RenderDrawLine(renderer, line_x, bounds.y + 15, line_x, bounds.y + bounds.h);
+    }
+}
+
+bool fexists(const std::string &filename) {
+    std::ifstream ifile(filename.c_str());
+    return (bool)ifile;
+}
+
+template <typename T> T Constrain(T val, T low, T high) {
+    if (val < low)
+        return low;
+    if (val > high)
+        return high;
+    return val;
+}
 
 // argc, argv not used
 int main(int argc, char *argv[]) {
@@ -127,11 +144,7 @@ int main(int argc, char *argv[]) {
 
     // SOUND STUFF
     std::string music_file = "./music/mt. fujitive - trees.mp3";
-    // essentia::init();
-    // essentia::Pool pool;
-    // essentia::Real bpm = 80;
-    double bpm = 80;
-    // std::vector<essentia::Real> ticks;
+    double bpm = 100;
     std::vector<double> ticks;
     {
         unsigned long long start = SDL_GetTicks();
@@ -146,16 +159,25 @@ int main(int argc, char *argv[]) {
         std::cerr << "Could not initialise SDL. ";
         std::cerr << "SDL_Error: " << SDL_GetError() << '\n';
     }
-    window =
-        SDL_CreateWindow("Bullet Hell Rhythm Game", SDL_WINDOWPOS_UNDEFINED,
-                         SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow("Bullet Hell Rhythm Game", SDL_WINDOWPOS_UNDEFINED,
+                              SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT + 50,
+                              SDL_WINDOW_SHOWN);
     if (window == NULL) {
         std::cerr << "Could not create window. ";
         std::cerr << "SDL_Error: " << SDL_GetError() << '\n';
     }
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    if (TTF_Init() < 0) {
+        std::cerr << "Could not create TTF loader. ";
+        std::cerr << "TTF_Error: " << TTF_GetError() << '\n';
+    }
+    FONT = TTF_OpenFont("calibri.ttf", 12);
+    if (FONT == NULL) {
+        std::cerr << "Could not load font. ";
+        std::cerr << "TTF_Error: " << TTF_GetError() << '\n';
+    }
     if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
-        std::cerr << "Could not create window. ";
+        std::cerr << "Could not create mixer. ";
         std::cerr << "Mix_Error: " << Mix_GetError() << '\n';
     }
     music = Mix_LoadMUS(music_file.c_str());
@@ -166,7 +188,7 @@ int main(int argc, char *argv[]) {
 
     running = true;
     Mix_PlayMusic(music, 0);
-    unsigned long long start = SDL_GetTicks();
+    unsigned long long prog_start = SDL_GetTicks();
     unsigned long long prev_ticks, curr_ticks;
     // These values are used to change visuals according to the analysed song
     unsigned int tempo_color = 0, beat_color = 0;
@@ -184,62 +206,32 @@ int main(int argc, char *argv[]) {
 
     World world(&player);
     Timeline *timeline = &world.timeline;
+    Timeline update_timer;
     Map *map = &world.map;
-    {
+    if (fexists(argv[1])) {
         std::ifstream mapfile;
-        mapfile.open("dabb.map", std::ios::binary);
+        mapfile.open(argv[1], std::ios::binary);
         map->read(&mapfile);
         mapfile.close();
     }
-
-    EntityFactory *_enemy = new EntityFactory();
-    _enemy->lives({true, 200, 200})
-        ->moves({Vec2::zero, 10})
-        ->occupies({new PolygonRegion({3, 3}, new RectangularBounds({1.2, 1.2}))});
-    Entity enemy = _enemy->create();
-    delete _enemy;
-    world.spawn(&enemy);
-    enemy.name = "enemy";
-
-    DamageOverTime *damage_event = new DamageOverTime({&player}, 5);
-    Spell damage_spell;
-    damage_spell.type = Spell::PROJECTILE;
-    damage_spell.effects = {damage_event, new Speed({&enemy}, 5, 0.1)};
-    damage_spell.source = &player;
-    Speed *speed_event = new Speed({&player}, 5, 3);
-    Spell speed_spell;
-    speed_spell.type = Spell::SELF;
-    speed_spell.effects = {speed_event};
-    speed_spell.source = &player;
-    Teleport *teleport_event = new Teleport({&player});
-    Spell teleport_spell;
-    teleport_spell.type = Spell::POINT_TARGET;
-    teleport_spell.effects = {teleport_event};
-    teleport_spell.source = &player;
-
-    class A : public Event {
-      public:
-        Entity *e;
-        A(Entity *e, double duration) : Event(0, duration), e(e) {}
-        virtual void act(double progress) {
-            if (progress == 0) {
-                e->moves.velocity = {1, 0};
-            } else if (progress == 1) {
-                e->moves.velocity = Vec2::zero;
-            }
-        }
-    };
-    A *enemy_move_event = new A(&enemy, 10);
 
     prev_ticks = SDL_GetTicks();
     Camera camera = Camera(&world, Vec2(0, 0), new RectangularBounds(Vec2(10, 10)), &SCREEN_WIDTH,
                            &SCREEN_HEIGHT);
 
+    std::vector<Position> vertices;
+    int vertices_size = 0;
+    std::vector<PolygonRegion *> *solids = map->solids();
+    bool ctrl_press = false;
     bool kup, kdown, kleft, kright;
     kup = kdown = kleft = kright = false;
     bool show_grid = false;
+    double interval = 1.0 / bpm;
+    double start = 0;
+    double framewidth = 8 * interval;
     timeline->start(SDL_GetTicks());
-    timeline->add(enemy_move_event, 3);
+    timeline->pause(SDL_GetTicks());
+    update_timer.start(SDL_GetTicks());
     // Main event loop
     while (running) {
         curr_ticks = SDL_GetTicks();
@@ -263,20 +255,70 @@ int main(int argc, char *argv[]) {
         }
 
         while (SDL_PollEvent(&e) != 0) {
-            if (e.type == SDL_MOUSEWHEEL) {
+            if (e.type == SDL_MOUSEBUTTONDOWN) {
+                Vec2 new_point = mtarget;
+                if (!ctrl_press)
+                    new_point = {std::round(mtarget.x), std::round(mtarget.y)};
+                if ((int)vertices.size() <= vertices_size)
+                    vertices.push_back(new_point);
+                else
+                    vertices[vertices_size] = new_point;
+                vertices_size += 1;
+            } else if (e.type == SDL_MOUSEWHEEL) {
                 if (e.wheel.y < 0) {
                     camera.zoom(0.8);
                 } else if (e.wheel.y > 0) {
                     camera.zoom(1.25);
                 }
-            }
-            if (e.type == SDL_KEYDOWN && e.key.repeat == 0) {
+            } else if (e.type == SDL_KEYDOWN && e.key.repeat == 0) {
                 switch (e.key.keysym.sym) {
-                    // quit game
-                case SDLK_ESCAPE:
-                    running = false;
+                case SDLK_LCTRL:
+                    // falls through
+                case SDLK_RCTRL:
+                    ctrl_press = true;
                     break;
-                    // increases velocity upon WASD press
+                case SDLK_ESCAPE:
+                    vertices.clear();
+                    vertices_size = 0;
+                    break;
+                case SDLK_SPACE: {
+                    std::vector<Position> vbounds(vertices.begin(),
+                                                  vertices.begin() + vertices_size);
+                    double l = std::numeric_limits<double>::max();
+                    double r = -std::numeric_limits<double>::max();
+                    double d = std::numeric_limits<double>::max();
+                    double u = -std::numeric_limits<double>::max();
+                    for (Position p : vbounds) {
+                        std::cout << l << ' ' << r << ' ' << u << ' ' << d << '\n';
+                        if (p.x < l)
+                            l = p.x;
+                        if (p.x > r)
+                            r = p.x;
+                        if (p.y < d)
+                            d = p.y;
+                        if (p.y > u)
+                            u = p.y;
+                    }
+                    std::cout << "Done: " << l << ' ' << r << ' ' << u << ' ' << d << "\n\n";
+                    const Position center = {(l + r) / 2, (u + d) / 2};
+                    for (auto it = vbounds.begin(); it != vbounds.end(); it++) {
+                        it->x -= center.x;
+                        it->y -= center.y;
+                    }
+                    solids->push_back(
+                        new PolygonRegion(center, new ConvexBounds(vbounds, {r - l, u - d})));
+                    vertices.clear();
+                    vertices_size = 0;
+                    break;
+                }
+                case SDLK_LEFT:
+                    vertices_size -= 1;
+                    vertices_size = Constrain(vertices_size, 0, (int)vertices.size());
+                    break;
+                case SDLK_RIGHT:
+                    vertices_size += 1;
+                    vertices_size = Constrain(vertices_size, 0, (int)vertices.size());
+                    break;
                 case SDLK_w:
                     kup = true;
                     break;
@@ -289,43 +331,50 @@ int main(int argc, char *argv[]) {
                 case SDLK_d:
                     kright = true;
                     break;
-                    // adjust camera position using arrow keys
-                case SDLK_UP:
-                    camera.occupies.region->position.y +=
-                        camera.occupies.region->bounds()->size().y / 10;
-                    break;
-                case SDLK_DOWN:
-                    camera.occupies.region->position.y +=
-                        -camera.occupies.region->bounds()->size().y / 10;
-                    break;
-                case SDLK_LEFT:
-                    camera.occupies.region->position.x +=
-                        -camera.occupies.region->bounds()->size().x / 10;
-                    break;
-                case SDLK_RIGHT:
-                    camera.occupies.region->position.x +=
-                        camera.occupies.region->bounds()->size().x / 10;
-                    break;
                     // toggles grid
+                case SDLK_k:
+                    interval += (ctrl_press ? 1.0 : 10.0) / bpm;
+                    break;
+                case SDLK_j:
+                    interval -= (ctrl_press ? 1.0 : 10.0) / bpm;
+                    if (interval <= 0)
+                        interval = 1.0 / bpm;
+                    break;
+                case SDLK_h:
+                    start -= ctrl_press ? (1.0 / bpm) : interval;
+                    break;
+                case SDLK_l:
+                    start += ctrl_press ? (1.0 / bpm) : interval;
+                    break;
+                case SDLK_COMMA:
+                    timeline->now -= (long)(1000 * (ctrl_press ? (1.0 / bpm) : interval));
+                    print(timeline->elapsed());
+                    break;
+                case SDLK_PERIOD:
+                    timeline->now += (long)(1000 * (ctrl_press ? (1.0 / bpm) : interval));
+                    print(timeline->elapsed());
+                    break;
+                case SDLK_MINUS:
+                    framewidth -= ctrl_press ? (1.0 / bpm) : interval;
+                    if (framewidth < 2 * interval)
+                        framewidth = 2 * interval;
+                    break;
+                case SDLK_EQUALS:
+                    framewidth += ctrl_press ? (1.0 / bpm) : interval;
+                    break;
                 case SDLK_g:
                     show_grid = !show_grid;
-                    break;
-                case SDLK_1:
-                    damage_spell.region->position = mtarget;
-                    damage_spell.use(&world);
-                    break;
-                case SDLK_2:
-                    speed_spell.use(&world);
-                    break;
-                case SDLK_3:
-                    teleport_spell.region->position = mtarget;
-                    teleport_spell.use(&world);
                     break;
                 default:
                     break;
                 }
             } else if (e.type == SDL_KEYUP && e.key.repeat == 0) {
                 switch (e.key.keysym.sym) {
+                case SDLK_LCTRL:
+                    // falls through
+                case SDLK_RCTRL:
+                    ctrl_press = false;
+                    break;
                 case SDLK_w:
                     kup = false;
                     break;
@@ -346,6 +395,7 @@ int main(int argc, char *argv[]) {
             } else if (e.type == SDL_WINDOWEVENT) {
                 // ensures the screen size is updated
                 SDL_GetWindowSize(window, &SCREEN_WIDTH, &SCREEN_HEIGHT);
+                SCREEN_HEIGHT -= 50;
             }
         }
 
@@ -368,11 +418,12 @@ int main(int argc, char *argv[]) {
             *v = Vec2::normalize(*v);
         }
 
-        timeline->update_now(SDL_GetTicks());
-        timeline->process();
+        update_timer.update_now(SDL_GetTicks());
+        update_timer.process();
+        camera.occupies.region->position = player.occupies.region->position;
 
         // change colour of beat box based on bpm
-        unsigned long long now = SDL_GetTicks() - start;
+        unsigned long long now = SDL_GetTicks() - prog_start;
         if (now >= spb * 1000) {
             tempo_color = (tempo_color + 15) % 255;
             spb += 60.0 / bpm;
@@ -388,20 +439,12 @@ int main(int argc, char *argv[]) {
         }
 
         // moves players, projectiles, kills dead entities, etc.
-        world.clean_up();
+        // world.clean_up();
+        player.move(update_timer.diff());
 
         // clear screen, beginning the drawing cycle
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
-
-        /*
-        // indicate if player collided with a solid
-        if (collided) {
-            SDL_Rect rect = {0, 40, 20, 20};
-            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-            SDL_RenderFillRect(renderer, &rect);
-        }
-        */
 
         SDL_Rect rect;
         // draw bpm indicator
@@ -463,6 +506,17 @@ int main(int argc, char *argv[]) {
             SDL_Rect rect = camera.screen_transform((*map->solids())[j]);
             SDL_RenderDrawRect(renderer, &rect);
         }
+        // drawing current construction
+        {
+            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+            SDL_Point points[vertices_size + 1];
+            for (int i = 0; i < vertices_size; i++) {
+                points[i] = camera.screen_transform(vertices[i]);
+                fill_circle(renderer, points[i].x, points[i].y, 7);
+            }
+            points[vertices_size] = {mx, my};
+            SDL_RenderDrawLines(renderer, points, vertices_size + 1);
+        }
 
         // draw entities
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
@@ -471,24 +525,29 @@ int main(int argc, char *argv[]) {
         for (Entity *e : entities) {
             SDL_Rect rect;
             rect = camera.screen_transform(e->occupies.region);
-            // draw the player as a red square instead of a white circle
+            // draw the player as a red crosshair instead of a white circle
             if (e == &player) {
                 SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+                rect = {(SCREEN_WIDTH - 10) / 2, (SCREEN_HEIGHT - 2) / 2, 10, 2};
+                SDL_RenderFillRect(renderer, &rect);
+                rect = {(SCREEN_WIDTH - 2) / 2, (SCREEN_HEIGHT - 10) / 2, 2, 10};
                 SDL_RenderFillRect(renderer, &rect);
                 SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
             } else {
                 fill_circle(renderer, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
             }
-            if (e->is_comp[Entity::LIVES] != 0) {
-                SDL_Rect full_hp_bar = {rect.x, rect.y - 10, rect.w, 5};
-                SDL_Rect hp_bar = {rect.x, rect.y - 10,
-                                   (int)(rect.w * e->lives.health / e->lives.max_health), 5};
-                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-                SDL_RenderFillRect(renderer, &full_hp_bar);
-                SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-                SDL_RenderFillRect(renderer, &hp_bar);
-                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-            }
+            // if (e->is_comp[Entity::LIVES] != 0) {
+            //     SDL_Rect full_hp_bar = {rect.x, rect.y - 10, rect.w, 5};
+            //     SDL_Rect hp_bar = {
+            //         rect.x, rect.y - 10,
+            //         (int)(rect.w * e->lives.health / e->lives.max_health),
+            //         5};
+            //     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+            //     SDL_RenderFillRect(renderer, &full_hp_bar);
+            //     SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+            //     SDL_RenderFillRect(renderer, &hp_bar);
+            //     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+            // }
         }
 
         // draw projectiles
@@ -500,17 +559,28 @@ int main(int argc, char *argv[]) {
             fill_circle(renderer, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
         }
 
+        draw_timeline(renderer, timeline, {0, SCREEN_HEIGHT, SCREEN_WIDTH, 50}, framewidth, start,
+                      interval);
+
         // finished rendering cycle
         SDL_RenderPresent(renderer);
         SDL_Delay(16); // delay added so that the processor doesnt overheat :)
         prev_ticks = curr_ticks;
     }
 
+    {
+        std::ofstream mapfile;
+        mapfile.open(argv[1], std::ios::binary);
+        map->write(&mapfile);
+        mapfile.close();
+    }
+
     // close everything sanely
-    // essentia::shutdown();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    TTF_CloseFont(FONT);
     Mix_FreeMusic(music);
+    TTF_Quit();
     Mix_Quit();
     SDL_Quit();
 }

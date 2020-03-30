@@ -5,9 +5,11 @@
 #include <iostream>
 
 #ifdef BHRG_NO_DEBUG
+void print() {}
 template <typename T> void print(T t) {}
 template <typename T, typename... Args> void print(T t, Args... args) {}
 #else
+template <> void print() { std::cout << '\n'; }
 template <typename T> void print(T t) { std::cout << t << '\n'; }
 template <typename T, typename... Args> void print(T t, Args... args) {
     std::cout << t << ' ';
