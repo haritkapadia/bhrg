@@ -11,7 +11,7 @@ void Map::read(std::istream *fin) {
     unsigned int solid_count;
     // reads the number of solids in the map
     fin->read((char *)&solid_count, sizeof(unsigned int));
-    print("Solids:", solid_count);
+    debug::print("Solids:", solid_count);
     // allocates space for the solids
     _solids.reserve(solid_count);
     // reads and adds each solid
@@ -27,20 +27,20 @@ void Map::read(std::istream *fin) {
         fin->read((char *)&size.x, sizeof(double));
         fin->read((char *)&size.y, sizeof(double));
         std::vector<Position> vertices;
-        print("Region", i, "with", vertex_count, "vertices around", center);
+        debug::print("Region", i, "with", vertex_count, "vertices around", center);
         vertices.reserve(vertex_count);
         // get vertices, assumed to be in counterclockwise order
         for (unsigned int j = 0; j < vertex_count; j++) {
             Position vertex;
             fin->read((char *)&vertex.x, sizeof(double));
             fin->read((char *)&vertex.y, sizeof(double));
-            print("Vertex", j, "\t", vertex);
+            debug::print("Vertex", j, "\t", vertex);
             vertices.push_back(vertex);
         }
         // add solid to map
         _solids.push_back(new PolygonRegion(center, new ConvexBounds(vertices, size)));
     }
-    print("Done reading.");
+    debug::print("Done reading map.");
 }
 
 // TODO Change static_cast to support all PolygonBounds
@@ -48,7 +48,7 @@ void Map::write(std::ostream *fout) {
     unsigned int solid_count = _solids.size();
     // write the number of solids in the map
     fout->write((char *)&solid_count, sizeof(unsigned int));
-    print("Solids:", solid_count);
+    debug::print("Solids:", solid_count);
 
     // writes each solid
     for (unsigned int i = 0; i < solid_count; i++) {
@@ -64,15 +64,15 @@ void Map::write(std::ostream *fout) {
         fout->write((char *)&size.x, sizeof(double));
         fout->write((char *)&size.y, sizeof(double));
         std::vector<Position> vertices = _solids[i]->bounds()->vertices();
-        print("Region", i, "with", vertex_count, "vertices around", center);
+        debug::print("Region", i, "with", vertex_count, "vertices around", center);
 
         // write vertices, assumed to be in counterclockwise order
         for (unsigned int j = 0; j < vertex_count; j++) {
             Position vertex = vertices[j];
             fout->write((char *)&vertex.x, sizeof(double));
             fout->write((char *)&vertex.y, sizeof(double));
-            print("Vertex", j, "\t", vertex);
+            debug::print("Vertex", j, "\t", vertex);
         }
     }
-    print("Done writing.");
+    debug::print("Done writing map.");
 }

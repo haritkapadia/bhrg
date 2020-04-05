@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
     bool running = false;
     int SCREEN_WIDTH = 500, SCREEN_HEIGHT = 500;
 
-    print("I love debugging!");
+    debug::print("I love debugging!");
 
     // SOUND STUFF
     std::string music_file = "./music/mt. fujitive - trees.mp3";
@@ -172,18 +172,16 @@ int main(int argc, char *argv[]) {
     unsigned int tempo_color = 0, beat_color = 0;
     unsigned long long ibeat = 0;
     double spb = 0;
-    // The playing region is loaded here
 
+    Timeline timeline;
     EntityFactory *_player = new EntityFactory();
     _player->lives({true, 100, 100})
         ->moves({Vec2::zero, 10})
         ->occupies({new PolygonRegion(Vec2::zero, new RectangularBounds({1, 1}))});
-    Entity player = _player->create();
+    World world(_player->create(), &timeline);
     delete _player;
-    player.name = "player";
-
-    World world(&player);
-    Timeline *timeline = &world.timeline;
+    Entity *player = world.player;
+    player->name = "player";
     Map *map = &world.map;
     {
         std::ifstream mapfile;
@@ -191,45 +189,28 @@ int main(int argc, char *argv[]) {
         map->read(&mapfile);
         mapfile.close();
     }
+    {
+        std::ifstream timefile;
+        timefile.open("dabb.time", std::ios::binary);
+        timeline.read(&timefile);
+        timefile.close();
+    }
 
-    EntityFactory *_enemy = new EntityFactory();
-    _enemy->lives({true, 200, 200})
-        ->moves({Vec2::zero, 10})
-        ->occupies({new PolygonRegion({3, 3}, new RectangularBounds({1.2, 1.2}))});
-    Entity enemy = _enemy->create();
-    delete _enemy;
-    world.spawn(&enemy);
-    enemy.name = "enemy";
-
-    DamageOverTime *damage_event = new DamageOverTime({&player}, 5);
+    DamageOverTime *damage_event = new DamageOverTime({player}, 5000);
     Spell damage_spell;
     damage_spell.type = Spell::PROJECTILE;
-    damage_spell.effects = {damage_event, new Speed({&enemy}, 5, 0.1)};
-    damage_spell.source = &player;
-    Speed *speed_event = new Speed({&player}, 5, 3);
+    damage_spell.effects = {damage_event, new Speed({NULL}, 5000, 0.1)};
+    damage_spell.source = player;
+    Speed *speed_event = new Speed({player}, 5000, 3.0);
     Spell speed_spell;
     speed_spell.type = Spell::SELF;
     speed_spell.effects = {speed_event};
-    speed_spell.source = &player;
-    Teleport *teleport_event = new Teleport({&player});
+    speed_spell.source = player;
+    Teleport *teleport_event = new Teleport({player});
     Spell teleport_spell;
     teleport_spell.type = Spell::POINT_TARGET;
     teleport_spell.effects = {teleport_event};
-    teleport_spell.source = &player;
-
-    class A : public Event {
-      public:
-        Entity *e;
-        A(Entity *e, double duration) : Event(0, duration), e(e) {}
-        virtual void act(double progress) {
-            if (progress == 0) {
-                e->moves.velocity = {1, 0};
-            } else if (progress == 1) {
-                e->moves.velocity = Vec2::zero;
-            }
-        }
-    };
-    A *enemy_move_event = new A(&enemy, 10);
+    teleport_spell.source = player;
 
     prev_ticks = SDL_GetTicks();
     Camera camera = Camera(&world, Vec2(0, 0), new RectangularBounds(Vec2(10, 10)), &SCREEN_WIDTH,
@@ -238,8 +219,7 @@ int main(int argc, char *argv[]) {
     bool kup, kdown, kleft, kright;
     kup = kdown = kleft = kright = false;
     bool show_grid = false;
-    timeline->start(SDL_GetTicks());
-    timeline->add(enemy_move_event, 3);
+    timeline.start(SDL_GetTicks());
     // Main event loop
     while (running) {
         curr_ticks = SDL_GetTicks();
@@ -350,7 +330,7 @@ int main(int argc, char *argv[]) {
         }
 
         {
-            Vec2 *v = &player.moves.velocity;
+            Vec2 *v = &player->moves.velocity;
             if (!(kleft ^ kright)) {
                 v->x = 0;
             } else if (kleft) {
@@ -368,8 +348,8 @@ int main(int argc, char *argv[]) {
             *v = Vec2::normalize(*v);
         }
 
-        timeline->update_now(SDL_GetTicks());
-        timeline->process();
+        timeline.update_now(SDL_GetTicks());
+        timeline.process();
 
         // change colour of beat box based on bpm
         unsigned long long now = SDL_GetTicks() - start;
@@ -472,7 +452,7 @@ int main(int argc, char *argv[]) {
             SDL_Rect rect;
             rect = camera.screen_transform(e->occupies.region);
             // draw the player as a red square instead of a white circle
-            if (e == &player) {
+            if (e == player) {
                 SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
                 SDL_RenderFillRect(renderer, &rect);
                 SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
@@ -513,4 +493,5 @@ int main(int argc, char *argv[]) {
     Mix_FreeMusic(music);
     Mix_Quit();
     SDL_Quit();
+    return 0;
 }

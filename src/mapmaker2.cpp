@@ -95,33 +95,34 @@ void write_text(SDL_Renderer *renderer, int x, int y, SDL_Color color, std::stri
     SDL_RenderCopy(renderer, t, NULL, &r);
 }
 
-void draw_timeline(SDL_Renderer *renderer, Timeline *timeline, SDL_Rect bounds, double framewidth,
-                   double start, double interval) {
+void draw_timeline(SDL_Renderer *renderer, Timeline *timeline, SDL_Rect bounds,
+                   long long framewidth, long long start, long long interval) {
     SDL_Rect rect = bounds;
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderFillRect(renderer, &rect);
     SDL_SetRenderDrawColor(renderer, 0x64, 0xb5, 0xf6, 255);
     rect = {bounds.x, bounds.y, bounds.w, 15};
     SDL_RenderFillRect(renderer, &rect);
-    for (double i = std::fmod(start + std::fmod(start, interval), interval); i < framewidth;
-         i += interval) {
-        int line_x = (int)(bounds.x + i * (bounds.w / framewidth));
+    for (long long i = (start + (start % interval)) % interval; i < framewidth; i += interval) {
+        int line_x = (int)(bounds.x + i * bounds.w / framewidth);
         SDL_RenderDrawLine(renderer, line_x, bounds.y, line_x, bounds.y + bounds.h);
         // I would use std::to_string but that function is broken on my MinGW compiler
         char numtext[31];
-        std::sprintf(numtext, "%.3f", start + i);
+        std::sprintf(numtext, "%lld", start + i);
         write_text(renderer, line_x, bounds.y, {0, 0, 0}, numtext);
     }
     SDL_SetRenderDrawColor(renderer, 0xe3, 0x33, 0x71, 255);
+    for (Event *e : timeline->future) {
+        int line_x = (int)(bounds.x + (e->start - start) * bounds.w / framewidth);
+        if (line_x >= 0 && line_x <= bounds.x + bounds.w) {
+            rect = {line_x - 2, bounds.y + 20, 5, 5};
+            SDL_RenderFillRect(renderer, &rect);
+        }
+    }
     {
-        int line_x = (int)(bounds.x + (timeline->elapsed() - start) * (bounds.w / framewidth));
+        int line_x = (int)(bounds.x + (timeline->elapsed() - start) * bounds.w / framewidth);
         SDL_RenderDrawLine(renderer, line_x, bounds.y + 15, line_x, bounds.y + bounds.h);
     }
-}
-
-bool fexists(const std::string &filename) {
-    std::ifstream ifile(filename.c_str());
-    return (bool)ifile;
 }
 
 template <typename T> T Constrain(T val, T low, T high) {
@@ -132,15 +133,56 @@ template <typename T> T Constrain(T val, T low, T high) {
     return val;
 }
 
-// argc, argv not used
+void draw_events(SDL_Renderer *renderer, Timeline *timeline, Camera *camera, int mx, int my) {
+    for (Event *_e : timeline->future) {
+        unsigned int event_type = std::distance(
+            Timeline::KNOWN_EVENT.begin(),
+            std::find(Timeline::KNOWN_EVENT.begin(), Timeline::KNOWN_EVENT.end(), _e->name));
+        switch (event_type) {
+        case 1: {
+            SpawnEnemy1 *e = dynamic_cast<SpawnEnemy1 *>(_e);
+            SDL_Rect rect;
+            rect = camera->screen_transform(e->_enemy->e.occupies.region);
+            SDL_SetRenderDrawColor(
+                renderer, 0xff, 0xb7, 0x4d,
+                (1000 -
+                 Constrain(std::abs((long long)(timeline->elapsed() - e->start)), 0ll, 1000ll)) *
+                    255 / 1000);
+            SDL_RenderFillRect(renderer, &rect);
+            if (mx >= rect.x && mx < rect.x + rect.w && my >= rect.y && my < rect.y + rect.h) {
+                SDL_Color black = {0, 0, 0};
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+                rect = {mx + 7, my, 100, 50};
+                SDL_RenderFillRect(renderer, &rect);
+                char numtext[100] = "Start: ";
+                std::sprintf(numtext + 7, "%lld", e->start);
+                write_text(renderer, rect.x + 5, rect.y + 5, black, numtext);
+                std::strcpy(numtext, "Duration: ");
+                std::sprintf(numtext + 10, "%llu", e->duration);
+                write_text(renderer, rect.x + 5, rect.y + 15, black, numtext);
+                std::strcpy(numtext, "Speed: ");
+                std::sprintf(numtext + 7, "%.3llf", e->_enemy->e.moves.speed);
+                write_text(renderer, rect.x + 5, rect.y + 25, black, numtext);
+            }
+            break;
+        }
+        default:
+            break;
+        };
+    }
+}
+
+bool fexists(const std::string &filename) {
+    std::ifstream ifile(filename.c_str());
+    return (bool)ifile;
+}
+
 int main(int argc, char *argv[]) {
     SDL_Window *window;
     SDL_Renderer *renderer;
     Mix_Music *music; // Music playing for SDL
     bool running = false;
     int SCREEN_WIDTH = 500, SCREEN_HEIGHT = 500;
-
-    print("I love debugging!");
 
     // SOUND STUFF
     std::string music_file = "./music/mt. fujitive - trees.mp3";
@@ -171,6 +213,7 @@ int main(int argc, char *argv[]) {
         std::cerr << "Could not create TTF loader. ";
         std::cerr << "TTF_Error: " << TTF_GetError() << '\n';
     }
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     FONT = TTF_OpenFont("calibri.ttf", 12);
     if (FONT == NULL) {
         std::cerr << "Could not load font. ";
@@ -196,16 +239,16 @@ int main(int argc, char *argv[]) {
     double spb = 0;
     // The playing region is loaded here
 
+    Timeline timeline;
     EntityFactory *_player = new EntityFactory();
     _player->lives({true, 100, 100})
         ->moves({Vec2::zero, 10})
         ->occupies({new PolygonRegion(Vec2::zero, new RectangularBounds({1, 1}))});
-    Entity player = _player->create();
+    World world(_player->create(), &timeline);
     delete _player;
-    player.name = "player";
+    Entity *player = world.player;
+    player->name = "player";
 
-    World world(&player);
-    Timeline *timeline = &world.timeline;
     Timeline update_timer;
     Map *map = &world.map;
     if (fexists(argv[1])) {
@@ -213,6 +256,12 @@ int main(int argc, char *argv[]) {
         mapfile.open(argv[1], std::ios::binary);
         map->read(&mapfile);
         mapfile.close();
+    }
+    if (fexists(argv[2])) {
+        std::ifstream timefile;
+        timefile.open(argv[2], std::ios::binary);
+        timeline.read(&timefile);
+        timefile.close();
     }
 
     prev_ticks = SDL_GetTicks();
@@ -226,11 +275,11 @@ int main(int argc, char *argv[]) {
     bool kup, kdown, kleft, kright;
     kup = kdown = kleft = kright = false;
     bool show_grid = false;
-    double interval = 1.0 / bpm;
-    double start = 0;
-    double framewidth = 8 * interval;
-    timeline->start(SDL_GetTicks());
-    timeline->pause(SDL_GetTicks());
+    long long interval = 1000 / bpm;
+    long long start = 0;
+    long long framewidth = 8 * interval;
+    timeline.start(SDL_GetTicks());
+    timeline.pause(SDL_GetTicks());
     update_timer.start(SDL_GetTicks());
     // Main event loop
     while (running) {
@@ -256,19 +305,35 @@ int main(int argc, char *argv[]) {
 
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_MOUSEBUTTONDOWN) {
-                Vec2 new_point = mtarget;
-                if (!ctrl_press)
-                    new_point = {std::round(mtarget.x), std::round(mtarget.y)};
-                if ((int)vertices.size() <= vertices_size)
-                    vertices.push_back(new_point);
-                else
-                    vertices[vertices_size] = new_point;
-                vertices_size += 1;
+                if (my < SCREEN_HEIGHT) {
+                    Vec2 new_point = mtarget;
+                    if (!ctrl_press)
+                        new_point = {std::round(mtarget.x), std::round(mtarget.y)};
+                    if ((int)vertices.size() <= vertices_size)
+                        vertices.push_back(new_point);
+                    else
+                        vertices[vertices_size] = new_point;
+                    vertices_size += 1;
+                } else {
+                    long long elapsed;
+                    std::cin >> elapsed;
+                    timeline.now = timeline.start_time + timeline.total_paused + elapsed;
+                }
             } else if (e.type == SDL_MOUSEWHEEL) {
-                if (e.wheel.y < 0) {
-                    camera.zoom(0.8);
-                } else if (e.wheel.y > 0) {
-                    camera.zoom(1.25);
+                if (my < SCREEN_HEIGHT) {
+                    if (e.wheel.y < 0) {
+                        camera.zoom(0.8);
+                    } else if (e.wheel.y > 0) {
+                        camera.zoom(1.25);
+                    }
+                } else {
+                    if (e.wheel.y < 0) {
+                        framewidth += ctrl_press ? (1000 / bpm) : interval;
+                    } else if (e.wheel.y > 0) {
+                        framewidth -= ctrl_press ? (1000 / bpm) : interval;
+                        if (framewidth < 2 * interval)
+                            framewidth = 2 * interval;
+                    }
                 }
             } else if (e.type == SDL_KEYDOWN && e.key.repeat == 0) {
                 switch (e.key.keysym.sym) {
@@ -333,38 +398,44 @@ int main(int argc, char *argv[]) {
                     break;
                     // toggles grid
                 case SDLK_k:
-                    interval += (ctrl_press ? 1.0 : 10.0) / bpm;
+                    interval += 1000 * (ctrl_press ? 1 : 10) / bpm;
                     break;
                 case SDLK_j:
-                    interval -= (ctrl_press ? 1.0 : 10.0) / bpm;
+                    interval -= 1000 * (ctrl_press ? 1 : 10) / bpm;
                     if (interval <= 0)
-                        interval = 1.0 / bpm;
+                        interval = 1000 / bpm;
                     break;
                 case SDLK_h:
-                    start -= ctrl_press ? (1.0 / bpm) : interval;
+                    start -= ctrl_press ? (1000 / bpm) : interval;
                     break;
                 case SDLK_l:
-                    start += ctrl_press ? (1.0 / bpm) : interval;
+                    start += ctrl_press ? (1000 / bpm) : interval;
                     break;
                 case SDLK_COMMA:
-                    timeline->now -= (long)(1000 * (ctrl_press ? (1.0 / bpm) : interval));
-                    print(timeline->elapsed());
+                    timeline.now -= ctrl_press ? (1000 / bpm) : interval;
                     break;
                 case SDLK_PERIOD:
-                    timeline->now += (long)(1000 * (ctrl_press ? (1.0 / bpm) : interval));
-                    print(timeline->elapsed());
+                    timeline.now += ctrl_press ? (1000 / bpm) : interval;
                     break;
                 case SDLK_MINUS:
-                    framewidth -= ctrl_press ? (1.0 / bpm) : interval;
+                    framewidth -= ctrl_press ? (1000 / bpm) : interval;
                     if (framewidth < 2 * interval)
                         framewidth = 2 * interval;
                     break;
                 case SDLK_EQUALS:
-                    framewidth += ctrl_press ? (1.0 / bpm) : interval;
+                    framewidth += ctrl_press ? (1000 / bpm) : interval;
                     break;
                 case SDLK_g:
                     show_grid = !show_grid;
                     break;
+                case SDLK_1: {
+                    EntityFactory *_enemy = new EntityFactory();
+                    _enemy->lives({true, 200, 200})
+                        ->moves({Vec2::zero, 3})
+                        ->occupies({new PolygonRegion(mtarget, new RectangularBounds({1, 1}))});
+                    timeline.add(new SpawnEnemy1(timeline.elapsed(), 10000, &world, _enemy));
+                    break;
+                }
                 default:
                     break;
                 }
@@ -400,7 +471,7 @@ int main(int argc, char *argv[]) {
         }
 
         {
-            Vec2 *v = &player.moves.velocity;
+            Vec2 *v = &player->moves.velocity;
             if (!(kleft ^ kright)) {
                 v->x = 0;
             } else if (kleft) {
@@ -420,7 +491,7 @@ int main(int argc, char *argv[]) {
 
         update_timer.update_now(SDL_GetTicks());
         update_timer.process();
-        camera.occupies.region->position = player.occupies.region->position;
+        camera.occupies.region->position = player->occupies.region->position;
 
         // change colour of beat box based on bpm
         unsigned long long now = SDL_GetTicks() - prog_start;
@@ -440,7 +511,7 @@ int main(int argc, char *argv[]) {
 
         // moves players, projectiles, kills dead entities, etc.
         // world.clean_up();
-        player.move(update_timer.diff());
+        player->move(update_timer.diff() / 1000.0);
 
         // clear screen, beginning the drawing cycle
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -520,13 +591,12 @@ int main(int argc, char *argv[]) {
 
         // draw entities
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        std::vector<Entity *> entities;
-        entities = world.entities_in_region(camera.occupies.region);
+        std::vector<Entity *> entities = world.entities_in_region(camera.occupies.region);
         for (Entity *e : entities) {
             SDL_Rect rect;
             rect = camera.screen_transform(e->occupies.region);
             // draw the player as a red crosshair instead of a white circle
-            if (e == &player) {
+            if (&(*e) == player) {
                 SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
                 rect = {(SCREEN_WIDTH - 10) / 2, (SCREEN_HEIGHT - 2) / 2, 10, 2};
                 SDL_RenderFillRect(renderer, &rect);
@@ -559,8 +629,9 @@ int main(int argc, char *argv[]) {
             fill_circle(renderer, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
         }
 
-        draw_timeline(renderer, timeline, {0, SCREEN_HEIGHT, SCREEN_WIDTH, 50}, framewidth, start,
+        draw_timeline(renderer, &timeline, {0, SCREEN_HEIGHT, SCREEN_WIDTH, 50}, framewidth, start,
                       interval);
+        draw_events(renderer, &timeline, &camera, mx, my);
 
         // finished rendering cycle
         SDL_RenderPresent(renderer);
@@ -573,14 +644,19 @@ int main(int argc, char *argv[]) {
         mapfile.open(argv[1], std::ios::binary);
         map->write(&mapfile);
         mapfile.close();
+        std::ofstream timefile;
+        timefile.open(argv[2], std::ios::binary);
+        timeline.write(&timefile);
+        timefile.close();
     }
 
     // close everything sanely
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
     TTF_CloseFont(FONT);
     Mix_FreeMusic(music);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
     TTF_Quit();
     Mix_Quit();
     SDL_Quit();
+    return 0;
 }

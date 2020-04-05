@@ -1,7 +1,7 @@
 #include "effect.hpp"
 #include <vector>
 
-Effect::Effect(std::vector<Entity *> targets, double duration)
+Effect::Effect(std::vector<Entity *> targets, unsigned long long duration)
     : Event(0, duration), targets(targets) {}
 
 void Effect::act(double progress) {
@@ -13,8 +13,8 @@ void Effect::act(double progress) {
             stop(e);
     } else {
         if (false && name == "dot")
-            std::cout << "Pulsing from " << last_pulse << " at p" << progress
-                      << " for a final " << pulses << '\n';
+            std::cout << "Pulsing from " << last_pulse << " at p" << progress << " for a final "
+                      << pulses << '\n';
         for (; last_pulse < progress * pulses; last_pulse++)
             for (Entity *e : targets)
                 pulse(e);
@@ -23,7 +23,7 @@ void Effect::act(double progress) {
     }
 }
 
-DamageOverTime::DamageOverTime(std::vector<Entity *> targets, double duration)
+DamageOverTime::DamageOverTime(std::vector<Entity *> targets, unsigned long long duration)
     : Effect(targets, duration) {
     pulses = 50;
     name = "dot";
@@ -40,7 +40,7 @@ void DamageOverTime::start(Entity *e) {}
 void DamageOverTime::pulse(Entity *e) { e->lives.damage(1); }
 void DamageOverTime::stop(Entity *e) {}
 
-Speed::Speed(std::vector<Entity *> targets, double duration, double mod)
+Speed::Speed(std::vector<Entity *> targets, unsigned long long duration, double mod)
     : Effect(targets, duration), mod(mod) {
     name = "speed";
 }
@@ -58,9 +58,7 @@ void Speed::start(Entity *e) { e->moves.speed *= mod; }
 void Speed::pulse(Entity *e) {}
 void Speed::stop(Entity *e) { e->moves.speed /= mod; }
 
-Teleport::Teleport(std::vector<Entity *> targets) : Effect(targets, 0) {
-    name = "tp";
-}
+Teleport::Teleport(std::vector<Entity *> targets) : Effect(targets, 0) { name = "tp"; }
 
 Teleport *Teleport::clone() {
     Teleport *other = new Teleport(targets);

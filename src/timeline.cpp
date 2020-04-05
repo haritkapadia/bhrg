@@ -1,24 +1,39 @@
 #include "timeline.hpp"
+#include "debug.hpp"
+#include "world.hpp"
 #include <algorithm>
 #include <iostream>
+#include <iterator>
 #include <ostream>
 #include <queue>
 #include <vector>
 
-Event::Event(double start, double duration) : start(start), duration(duration) {}
-
-bool operator<(const Event &l, const Event &r) { return l.start < r.start; }
-
-std::ostream &operator<<(std::ostream &os, Event const &e) {
-    return os << "(" << e.start << "s for " << e.duration << "s)";
+SpawnEnemy1::SpawnEnemy1(unsigned long long start, unsigned long long duration, World *world,
+                         EntityFactory *_enemy)
+    : Event(start, duration), world(world), _enemy(_enemy) {
+    name = "SpawnEnemy1";
 }
 
+void SpawnEnemy1::act(double progress) {
+    if (progress == 0) {
+        enemy = world->spawn(_enemy->create());
+    }
+    Entity *player = world->player;
+    enemy->moves.velocity =
+        Vec2::normalize(player->occupies.region->position - enemy->occupies.region->position);
+    if (progress == 1) {
+        enemy->lives.kill();
+    }
+}
+
+const std::array<std::string, 2> Timeline::KNOWN_EVENT = {"Event", "SpawnEnemy1"};
+
 void Timeline::process() {
-    double elapsed = Stopwatch::elapsed();
+    unsigned long long elapsed = Stopwatch::elapsed();
     // For each event currently running, act
     // If the the event is done, make sure to pass act(1.0), then remove
     for (auto et = present.begin(); et != present.end();) {
-        double action_progress = (elapsed - (*et)->start) / (*et)->duration;
+        double action_progress = (double)(elapsed - (*et)->start) / (double)((*et)->duration);
         bool destroy = false;
         if (action_progress >= 1) {
             action_progress = 1;
@@ -36,8 +51,9 @@ void Timeline::process() {
     }
     // Add events that have reached the present to the running events
     Event *e;
-    while (!future.empty() && (e = future.top())->start < elapsed) {
-        future.pop();
+    while (!future.empty() && (e = future[0])->start < elapsed) {
+        std::pop_heap(future.begin(), future.end());
+        future.pop_back();
         e->act(0);
         // instant events have 0 duration
         // they should not occur more than once
@@ -46,9 +62,72 @@ void Timeline::process() {
     }
 }
 
-void Timeline::add(Event *e) { future.push(e); }
+void Timeline::add(Event *e) {
+    future.push_back(e);
+    std::push_heap(future.begin(), future.end());
+}
 
-void Timeline::add(Event *e, double dt) {
+void Timeline::add(Event *e, unsigned long long dt) {
     e->start = Stopwatch::elapsed() + dt;
-    future.push(e);
+    add(e);
+}
+
+void Timeline::read(std::istream *fin) {
+    unsigned int event_count;
+    fin->read((char *)&event_count, sizeof(unsigned int));
+    debug::print("Events:", event_count);
+    for (unsigned int i = 0; i < event_count; i++) {
+        unsigned int event_type;
+        fin->read((char *)&event_type, sizeof(unsigned int));
+        debug::print("Event type:", event_type);
+        switch (event_type) {
+        case 1: {
+            long long time_start;
+            unsigned long long duration;
+            Position start;
+            double speed;
+            fin->read((char *)&time_start, sizeof(long long));
+            fin->read((char *)&duration, sizeof(unsigned long long));
+            fin->read((char *)&start.x, sizeof(double));
+            fin->read((char *)&start.y, sizeof(double));
+            fin->read((char *)&speed, sizeof(double));
+            EntityFactory *_enemy = new EntityFactory();
+            _enemy->lives({true, 200, 200})
+                ->moves({Vec2::zero, speed})
+                ->occupies({new PolygonRegion(start, new RectangularBounds({1, 1}))});
+            add(new SpawnEnemy1(time_start, duration, world, _enemy));
+            break;
+        }
+        default:
+            break;
+        };
+    }
+}
+
+void Timeline::write(std::ostream *fout) {
+    unsigned int event_count = future.size();
+    fout->write((char *)&event_count, sizeof(unsigned int));
+    debug::print("Events:", event_count);
+    for (Event *e : future) {
+        unsigned int event_type = std::distance(
+            KNOWN_EVENT.begin(), std::find(KNOWN_EVENT.begin(), KNOWN_EVENT.end(), e->name));
+        fout->write((char *)&event_type, sizeof(unsigned int));
+        switch (event_type) {
+        case 1: {
+            SpawnEnemy1 *s = dynamic_cast<SpawnEnemy1 *>(e);
+            long long time_start = s->start;
+            unsigned long long duration = s->duration;
+            Position start = s->_enemy->e.occupies.region->position;
+            double speed = s->_enemy->e.moves.speed;
+            fout->write((char *)&time_start, sizeof(long long));
+            fout->write((char *)&duration, sizeof(unsigned long long));
+            fout->write((char *)&start.x, sizeof(double));
+            fout->write((char *)&start.y, sizeof(double));
+            fout->write((char *)&speed, sizeof(double));
+            break;
+        }
+        default:
+            break;
+        };
+    }
 }

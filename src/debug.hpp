@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <iostream>
 
+namespace debug {
 #ifdef BHRG_NO_DEBUG
 template <typename T> void print(T t) {}
 template <typename T, typename... Args> void print(T t, Args... args) {}
@@ -14,5 +15,6 @@ template <typename T, typename... Args> void print(T t, Args... args) {
     print(args...);
 }
 #endif
+} // namespace debug
 
 #endif

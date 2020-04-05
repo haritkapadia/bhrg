@@ -15,8 +15,8 @@ class Stopwatch {
     void unpause(unsigned long long now);
     void toggle_pause(unsigned long long now);
     void update_now(unsigned long long _now);
-    double elapsed();
-    double diff();
+    unsigned long long elapsed();
+    unsigned long long diff();
 };
 
 #endif

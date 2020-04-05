@@ -1,5 +1,6 @@
 #include "world.hpp"
 #include "bounds.hpp"
+#include "debug.hpp"
 #include "entity.hpp"
 #include <algorithm>
 #include <cmath>
@@ -7,39 +8,40 @@
 #include <iostream>
 #include <vector>
 
-World::World(Entity *player) : player(player) { spawn(player); }
+World::World(Entity player, Timeline *timeline) : timeline(timeline) {
+    this->player = spawn(player);
+    this->timeline->world = this;
+}
 
 std::vector<Entity *> World::entities_in_region(Region *region) {
     std::vector<Entity *> out;
-    for (Entity *e : entities)
+    for (auto e = entities.begin(); e != entities.end(); e++)
         if (e->is_comp[Entity::OCCUPIES])
             if (region->might_collide(e->occupies.region))
-                out.push_back(e);
+                out.push_back(&(*e));
     return out;
 }
 
-void World::spawn(Entity *e) { entities.push_back(e); }
-
-void World::add_projectile(Projectile projectile) {
-    projectiles.push_back(projectile);
+Entity *World::spawn(Entity e) {
+    entities.push_front(e);
+    return &entities.front();
 }
+
+void World::add_projectile(Projectile projectile) { projectiles.push_back(projectile); }
 
 bool World::test_collide(Entity *e, std::vector<Projectile>::iterator p) {
     Vec2 dist = e->occupies.region->position - p->position;
-    return Vec2::dot(dist, dist) <
-           std::pow(e->occupies.region->bounds()->size().x / 2, 2);
+    return Vec2::dot(dist, dist) < std::pow(e->occupies.region->bounds()->size().x / 2, 2);
 }
 
 /**
  * Returns the maximum hits remaining for the projectile.
  */
-int World::apply_projectile_hit(Entity *e, std::vector<Projectile>::iterator p,
-                                Timeline *timeline,
+int World::apply_projectile_hit(Entity *e, std::vector<Projectile>::iterator p, Timeline *timeline,
                                 std::vector<Entity *> *temp_hit) {
     auto p_it = std::find(p->prev_hit.begin(), p->prev_hit.end(), e);
     auto t_it = std::find(temp_hit->begin(), temp_hit->end(), e);
-    if (e != p->source && p_it == p->prev_hit.end() &&
-        t_it == temp_hit->end()) {
+    if (e != p->source && p_it == p->prev_hit.end() && t_it == temp_hit->end()) {
         // we hit an entity!
         p->max_hit -= 1;
         for (Effect *ef : *p->on_hit) {
@@ -59,8 +61,9 @@ void World::move_projectiles(double duration) {
         bool hitp = false;
         // if the projectile has a position it wants to travel to,
         // adjust its velocity direction to travel towards that position
-        if (p->target != NULL) {
-            // THIS IS DONE!
+        if (p->target == NULL) {
+            p->position = p->position + p->velocity * duration * p->speed;
+        } else {
             p->velocity = Vec2::normalize(*p->target - p->position);
             Vec2 l = p->position;
             Vec2 r = p->position + p->velocity * duration * p->speed;
@@ -81,22 +84,19 @@ void World::move_projectiles(double duration) {
             } else {
                 p->position = r;
             }
-        } else {
-            p->position = p->position + p->velocity * duration * p->speed;
         }
 
         // check if it collided with an entity
         std::vector<Entity *> temp_hit;
         if (p->source == player) {
-            for (unsigned int i = 0; i < entities.size(); i++) {
-                Entity *e = entities[i];
-                if (e != player && test_collide(e, p))
-                    if (apply_projectile_hit(e, p, &timeline, &temp_hit) == 0)
+            for (auto e = entities.begin(); e != entities.end(); e++) {
+                if (&(*e) != &(*player) && test_collide(&(*e), p))
+                    if (apply_projectile_hit(&(*e), p, timeline, &temp_hit) == 0)
                         break;
             }
         } else {
             if (test_collide(player, p))
-                if (apply_projectile_hit(player, p, &timeline, &temp_hit) == 0)
+                if (apply_projectile_hit(player, p, timeline, &temp_hit) == 0)
                     break;
         }
         p->prev_hit = temp_hit;
@@ -111,30 +111,28 @@ void World::move_projectiles(double duration) {
 void World::clean_up() {
     // moves all entities and projectiles in the world
     for (auto _e = entities.begin(); _e != entities.end();) {
-        Entity *e = *_e;
-        if (e->is_comp[Entity::LIVES] && e->lives.health <= 0) {
-            entities.erase(_e);
+        Entity e = *_e;
+        if (e.is_comp[Entity::LIVES] && !e.lives.alive) {
+            _e = entities.erase(_e);
             continue;
         }
-        if (e->is_comp[Entity::MOVES]) {
-            e->move(timeline.diff());
+        if (e.is_comp[Entity::MOVES]) {
+            e.move(timeline->diff() / 1000.0);
         }
         _e++;
     }
-    move_projectiles(timeline.diff());
+    move_projectiles(timeline->diff() / 1000.0);
 
     // collision detection: player with solids
     bool collided = false;
     for (PolygonRegion *s : *map.solids()) {
-        for (Entity *e : entities) {
-            if (s->might_collide(e->occupies.region)) {
+        for (Entity e : entities) {
+            if (s->might_collide(e.occupies.region)) {
                 Vec2 translation =
-                    static_cast<PolygonRegion *>(e->occupies.region)
-                        ->min_translate(s);
+                    static_cast<PolygonRegion *>(e.occupies.region)->min_translate(s);
                 if (translation != Vec2::zero) {
                     collided = true;
-                    e->occupies.region->position =
-                        e->occupies.region->position + translation;
+                    e.occupies.region->position = e.occupies.region->position + translation;
                 }
             }
         }

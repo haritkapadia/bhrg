@@ -29,6 +29,10 @@ class Entity {
             else if (health < 0)
                 alive = false;
         }
+        void kill() {
+            health = 0;
+            alive = false;
+        }
     };
     struct Moves {
         Vec2 velocity;
@@ -42,6 +46,8 @@ class Entity {
     Lives lives;
     Moves moves;
     Occupies occupies;
+    Entity();
+    Entity(Entity const &e);
     void move(double duration);
     friend std::ostream &operator<<(std::ostream &os, Entity const &e);
     friend std::ostream &operator<<(std::ostream &os, Lives const &l);
@@ -50,10 +56,8 @@ class Entity {
 };
 
 class EntityFactory {
-  private:
-    Entity e;
-
   public:
+    Entity e;
     EntityFactory *lives(Entity::Lives _lives);
     EntityFactory *moves(Entity::Moves _moves);
     EntityFactory *occupies(Entity::Occupies _occupies);

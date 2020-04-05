@@ -5,7 +5,9 @@
 #include "effect.hpp"
 #include "entity.hpp"
 #include "map.hpp"
+#include "timeline.hpp"
 #include <functional>
+#include <list>
 #include <set>
 #include <unordered_set>
 #include <vector>
@@ -26,34 +28,24 @@ struct Projectile {
     std::vector<Entity *> prev_hit = {};
 };
 
-// class HitCooldown : public Event {
-// public:
-//   unsigned int e_idx;
-//   Projectile* p;
-//   int i;
-//   HitCooldown(unsigned int e_idx, Projectile* p, int i);
-//   virtual void act(double progress);
-// };
-
 class World {
   private:
     bool test_collide(Entity *e, std::vector<Projectile>::iterator p);
-    int apply_projectile_hit(Entity *e, std::vector<Projectile>::iterator p,
-                             Timeline *timeline,
+    int apply_projectile_hit(Entity *e, std::vector<Projectile>::iterator p, Timeline *timeline,
                              std::vector<Entity *> *temp_hit);
 
   public:
-    World(Entity *player);
+    World(Entity player, Timeline *timeline);
     Entity *player;
-    std::vector<Entity *> entities;
+    std::list<Entity> entities;
     std::vector<Entity *> entities_in_region(Region *region);
-    void spawn(Entity *entity);
+    Entity *spawn(Entity entity);
     void add_projectile(Projectile projectile);
     void move_projectiles(double duration);
     void clean_up();
     std::vector<Projectile> projectiles;
     Map map;
-    Timeline timeline;
+    Timeline *timeline;
 };
 
 #endif

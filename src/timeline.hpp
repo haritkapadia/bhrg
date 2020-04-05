@@ -1,30 +1,38 @@
 #ifndef TIMELINE_HPP
 #define TIMELINE_HPP
 
+#include "entity.hpp"
+#include "event.hpp"
 #include "stopwatch.hpp"
+#include <array>
 #include <istream>
 #include <ostream>
 #include <queue>
 #include <vector>
 
-class Event {
+class World;
+
+class SpawnEnemy1 : public Event {
   public:
-    double start;
-    double duration;
-    Event(double start, double duration);
-    virtual void act(double progress) = 0;
-    friend bool operator<(Event const &l, Event const &r);
-    friend std::ostream &operator<<(std::ostream &os, Event const &e);
-    std::string name = "blank";
+    EntityFactory *_enemy;
+    Entity *enemy;
+    World *world;
+    SpawnEnemy1(unsigned long long start, unsigned long long duration, World *world,
+                EntityFactory *_enemy);
+    virtual void act(double progress);
 };
 
 class Timeline : public Stopwatch {
   public:
-    std::priority_queue<Event *> future;
+    static const std::array<std::string, 2> KNOWN_EVENT;
+    World *world;
+    std::vector<Event *> future;
     std::vector<Event *> present;
     void process();
     void add(Event *e);
-    void add(Event *e, double dt);
+    void add(Event *e, unsigned long long dt);
+    void read(std::istream *fin);
+    void write(std::ostream *fout);
 };
 
 #endif

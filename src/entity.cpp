@@ -1,6 +1,16 @@
 #include "entity.hpp"
 #include <iostream>
 
+Entity::Entity() {}
+
+Entity::Entity(Entity const &e) {
+    is_comp = e.is_comp;
+    name = e.name;
+    lives = e.lives;
+    moves = e.moves;
+    occupies = e.occupies;
+}
+
 void Entity::move(double duration) {
     if (moves.velocity == Vec2::zero)
         return;

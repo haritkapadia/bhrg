@@ -2,7 +2,7 @@
 #define EFFECT_HPP
 
 #include "entity.hpp"
-#include "timeline.hpp"
+#include "event.hpp"
 
 class Effect : public Event {
   public:
@@ -10,7 +10,7 @@ class Effect : public Event {
     int last_pulse = 0;
     Vec2 point = Vec2::zero;
     std::vector<Entity *> targets;
-    Effect(std::vector<Entity *> targets, double duration);
+    Effect(std::vector<Entity *> targets, unsigned long long duration);
     virtual void act(double progress);
     virtual void start(Entity *e) = 0;
     virtual void stop(Entity *e) = 0;
@@ -20,7 +20,7 @@ class Effect : public Event {
 
 class DamageOverTime : public Effect {
   public:
-    DamageOverTime(std::vector<Entity *> targets, double duration);
+    DamageOverTime(std::vector<Entity *> targets, unsigned long long duration);
     virtual void start(Entity *e);
     virtual void stop(Entity *e);
     virtual void pulse(Entity *e);
@@ -32,7 +32,7 @@ class Speed : public Effect {
     double mod;
 
   public:
-    Speed(std::vector<Entity *> targets, double duration, double mod);
+    Speed(std::vector<Entity *> targets, unsigned long long duration, double mod);
     virtual void start(Entity *e);
     virtual void stop(Entity *e);
     virtual void pulse(Entity *e);

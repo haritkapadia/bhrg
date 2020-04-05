@@ -38,8 +38,6 @@ void Stopwatch::update_now(unsigned long long _now) {
     //           << (now - start_time + total_paused) / 1000.0 << '\n';
 }
 
-double Stopwatch::elapsed() {
-    return (now - start_time + total_paused) / 1000.0;
-}
+unsigned long long Stopwatch::elapsed() { return now - start_time + total_paused; }
 
-double Stopwatch::diff() { return (now - prev) / 1000.0; }
+unsigned long long Stopwatch::diff() { return now - prev; }
