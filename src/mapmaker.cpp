@@ -777,10 +777,10 @@ int main(int argc, char *argv[]) {
         default:
             break;
         }
+        draw_events(renderer, &timeline, &camera, mx, my);
 
         draw_timeline(renderer, &timeline, {0, SCREEN_HEIGHT, SCREEN_WIDTH, 50}, framewidth, start,
                       interval);
-        draw_events(renderer, &timeline, &camera, mx, my);
 
         // finished rendering cycle
         SDL_RenderPresent(renderer);

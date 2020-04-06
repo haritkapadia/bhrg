@@ -23,7 +23,7 @@ void Map::read(std::istream *fin) {
             fin->read((char *)&center.y, sizeof(double));
             fin->read((char *)&size.x, sizeof(double));
             fin->read((char *)&size.y, sizeof(double));
-            debug::print("Rectangle at", center, "with dimensions", size);
+            debug::print("Rectangle", i, "at", center, "with dimensions", size);
             solids.push_back(new Rectangle(center, size));
             break;
         }
@@ -49,7 +49,7 @@ void Map::read(std::istream *fin) {
             fin->read((char *)&center.x, sizeof(double));
             fin->read((char *)&center.y, sizeof(double));
             fin->read((char *)&radius, sizeof(double));
-            debug::print("Circle at", center, "with radius", radius);
+            debug::print("Circle", i, "at", center, "with radius", radius);
             solids.push_back(new Circle(center, radius));
             break;
         }
