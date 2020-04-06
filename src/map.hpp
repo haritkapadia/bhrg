@@ -1,7 +1,6 @@
 #ifndef MAP_HPP
 #define MAP_HPP
 
-#include "bounds.hpp"
 #include "region.hpp"
 #include <istream>
 #include <ostream>
@@ -11,14 +10,8 @@
  * A collection of solids and notable features of a world.
  */
 class Map {
-  private:
-    std::vector<PolygonRegion *> _solids;
-
   public:
-    /**
-     * @return The solids in the world.
-     */
-    std::vector<PolygonRegion *> *solids();
+    std::vector<Region *> solids;
     /**
      * Reads a map from a file created by write().
      *

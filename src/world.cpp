@@ -1,7 +1,5 @@
 #include "world.hpp"
-#include "bounds.hpp"
 #include "debug.hpp"
-#include "entity.hpp"
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -17,7 +15,7 @@ std::vector<Entity *> World::entities_in_region(Region *region) {
     std::vector<Entity *> out;
     for (auto e = entities.begin(); e != entities.end(); e++)
         if (e->is_comp[Entity::OCCUPIES])
-            if (region->might_collide(e->occupies.region))
+            if (Region::might_collide(region, e->occupies.region))
                 out.push_back(&(*e));
     return out;
 }
@@ -30,8 +28,7 @@ Entity *World::spawn(Entity e) {
 void World::add_projectile(Projectile projectile) { projectiles.push_back(projectile); }
 
 bool World::test_collide(Entity *e, std::vector<Projectile>::iterator p) {
-    Vec2 dist = e->occupies.region->position - p->position;
-    return Vec2::dot(dist, dist) < std::pow(e->occupies.region->bounds()->size().x / 2, 2);
+    return e->occupies.region->contains(p->position);
 }
 
 /**
@@ -108,7 +105,7 @@ void World::move_projectiles(double duration) {
     }
 }
 
-void World::clean_up() {
+void World::clean_up(SDL_Renderer *renderer, Camera *camera) {
     // moves all entities and projectiles in the world
     for (auto _e = entities.begin(); _e != entities.end();) {
         Entity e = *_e;
@@ -124,15 +121,23 @@ void World::clean_up() {
     move_projectiles(timeline->diff() / 1000.0);
 
     // collision detection: player with solids
-    bool collided = false;
-    for (PolygonRegion *s : *map.solids()) {
+    for (Region *s : map.solids) {
         for (Entity e : entities) {
-            if (s->might_collide(e.occupies.region)) {
-                Vec2 translation =
-                    static_cast<PolygonRegion *>(e.occupies.region)->min_translate(s);
+            if (Region::might_collide(s, e.occupies.region)) {
+                // if (auto _s = dynamic_cast<Convex *>(s)) {
+                //     std::vector<Vec2> vertices = _s->vertices();
+                //     for (auto v = vertices.rbegin(); v != vertices.rend(); v++) {
+                //         Vec2 e_center = e.occupies.region->center();
+                //         SDL_Point a = camera->screen_transform(e_center);
+                //         SDL_Point b =
+                //             camera->screen_transform(e_center + Vec2::normalize(*v - e_center));
+                //         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+                //         SDL_RenderDrawLine(renderer, a.x, a.y, b.x, b.y);
+                //     }
+                // }
+                Vec2 translation = Region::uncollide(e.occupies.region, s);
                 if (translation != Vec2::zero) {
-                    collided = true;
-                    e.occupies.region->position = e.occupies.region->position + translation;
+                    e.occupies.region->translate(translation);
                 }
             }
         }

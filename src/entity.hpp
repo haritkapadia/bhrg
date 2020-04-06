@@ -1,10 +1,7 @@
 #ifndef ENTITY_HPP
 #define ENTITY_HPP
 
-#include "bounds.hpp"
-#include "class_util.hpp"
 #include "region.hpp"
-#include "vec.hpp"
 #include <bitset>
 #include <iostream>
 #include <ostream>
@@ -42,7 +39,7 @@ class Entity {
         Region *region;
     };
     std::bitset<Entity::COMP_COUNT> is_comp;
-    std::string name = "baf";
+    std::string name = "Entity";
     Lives lives;
     Moves moves;
     Occupies occupies;

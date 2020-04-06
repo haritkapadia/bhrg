@@ -1,11 +1,13 @@
 #ifndef WORLD_HPP
 #define WORLD_HPP
 
-#include "bounds.hpp"
+#include "camera.hpp"
 #include "effect.hpp"
 #include "entity.hpp"
 #include "map.hpp"
+#include "region.hpp"
 #include "timeline.hpp"
+#include <SDL2/SDL.h>
 #include <functional>
 #include <list>
 #include <set>
@@ -42,7 +44,7 @@ class World {
     Entity *spawn(Entity entity);
     void add_projectile(Projectile projectile);
     void move_projectiles(double duration);
-    void clean_up();
+    void clean_up(SDL_Renderer *renderer, Camera *camera);
     std::vector<Projectile> projectiles;
     Map map;
     Timeline *timeline;

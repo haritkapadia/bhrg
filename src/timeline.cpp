@@ -20,7 +20,7 @@ void SpawnEnemy1::act(double progress) {
     }
     Entity *player = world->player;
     enemy->moves.velocity =
-        Vec2::normalize(player->occupies.region->position - enemy->occupies.region->position);
+        Vec2::normalize(player->occupies.region->center() - enemy->occupies.region->center());
     if (progress == 1) {
         enemy->lives.kill();
     }
@@ -94,7 +94,7 @@ void Timeline::read(std::istream *fin) {
             EntityFactory *_enemy = new EntityFactory();
             _enemy->lives({true, 200, 200})
                 ->moves({Vec2::zero, speed})
-                ->occupies({new PolygonRegion(start, new RectangularBounds({1, 1}))});
+                ->occupies({new Circle(start, 0.5)});
             add(new SpawnEnemy1(time_start, duration, world, _enemy));
             break;
         }
@@ -117,7 +117,7 @@ void Timeline::write(std::ostream *fout) {
             SpawnEnemy1 *s = dynamic_cast<SpawnEnemy1 *>(e);
             long long time_start = s->start;
             unsigned long long duration = s->duration;
-            Position start = s->_enemy->e.occupies.region->position;
+            Position start = s->_enemy->e.occupies.region->center();
             double speed = s->_enemy->e.moves.speed;
             fout->write((char *)&time_start, sizeof(long long));
             fout->write((char *)&duration, sizeof(unsigned long long));

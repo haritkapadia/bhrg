@@ -1,6 +1,7 @@
 #ifndef DEBUG_HPP
 #define DEBUG_HPP
 
+#include "prettyprint.hpp"
 #include <assert.h>
 #include <iostream>
 

@@ -13,12 +13,12 @@
 #include <limits>
 #include <vector>
 
-#include "bounds.hpp"
 #include "camera.hpp"
 #include "debug.hpp"
 #include "effect.hpp"
 #include "entity.hpp"
 #include "map.hpp"
+#include "region.hpp"
 #include "spell.hpp"
 #include "timeline.hpp"
 #include "vec.hpp"
@@ -27,20 +27,19 @@
 #define SAMPLE_RATE 44100
 // using namespace essentia;
 
-/**
- * Places a filled circle onto the renderer.
- *
- * @param renderer   The renderer.
- * @param cx         The screen x-coordinate of the center of the circle.
- * @param cy         The screen y-coordinate of the center of the circle.
- * @param radius     The radius of the circle in pixels
- */
-
 TTF_Font *FONT = NULL;
+
+void draw_circle(SDL_Renderer *renderer, int cx, int cy, int radius) {
+    for (int i = -radius; i <= radius; i++) {
+        int height = (int)std::sqrt(radius * radius - i * i);
+        SDL_RenderDrawPoint(renderer, cx + i, cy - height);
+        SDL_RenderDrawPoint(renderer, cx + i, cy + height);
+    }
+}
 
 void fill_circle(SDL_Renderer *renderer, int cx, int cy, int radius) {
     for (int i = -radius; i <= radius; i++) {
-        int height = std::sqrt(radius * radius - i * i);
+        int height = (int)std::sqrt(radius * radius - i * i);
         SDL_RenderDrawLine(renderer, cx + i, cy - height, cx + i, cy + height);
     }
 }
@@ -57,10 +56,10 @@ void draw_grid(SDL_Renderer *renderer, Camera *camera, int width, int height) {
     // j contains the leftmost integer grid position
     int j = 0;
     double gp = 0;
-    Vec2 camera_position = camera->occupies.region->position;
-    Vec2 camera_size = camera->occupies.region->bounds()->size();
+    Vec2 camera_position = camera->occupies.region->center();
+    Vec2 camera_size = camera->occupies.region->size();
     // j is calculated for width here
-    if (camera->occupies.region->position.x - camera_size.x / 2 > 0)
+    if (camera_position.x - camera_size.x / 2 > 0)
         j = std::ceil(camera_position.x - camera_size.x / 2);
     else
         j = 1 + std::floor(camera_position.x - camera_size.x / 2);
@@ -177,6 +176,160 @@ bool fexists(const std::string &filename) {
     return (bool)ifile;
 }
 
+Vec2 set_target(Vec2 mtarget, bool round) {
+    if (round)
+        return mtarget;
+    else
+        return {std::round(mtarget.x), std::round(mtarget.y)};
+}
+
+namespace rectangle_mode {
+int const ID = 0;
+SDL_Texture *t;
+SDL_Rect r;
+bool drawing = false;
+Vec2 start;
+
+void click(Vec2 mtarget, bool ctrl_press, std::vector<Region *> *solids) {
+    Vec2 new_point = set_target(mtarget, ctrl_press);
+    if (drawing) {
+        Vec2 north_east = new_point - start;
+        if (north_east.x < 0)
+            north_east.x = -north_east.x;
+        if (north_east.y < 0)
+            north_east.y = -north_east.y;
+        solids->push_back(new Rectangle(0.5 * (start + new_point), north_east));
+    } else {
+        start = new_point;
+    }
+    drawing = !drawing;
+}
+
+void escape() { drawing = false; }
+
+void draw_info(SDL_Renderer *renderer, Camera *camera, int mx, int my) {
+    SDL_RenderCopy(renderer, t, NULL, &r);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    if (drawing) {
+        SDL_Point c = camera->screen_transform(start);
+        SDL_Rect out;
+        out.x = std::min(c.x, mx);
+        out.y = std::min(c.y, my);
+        out.w = std::max(c.x, mx) - out.x;
+        out.h = std::max(c.y, my) - out.y;
+        SDL_RenderDrawRect(renderer, &out);
+    }
+    SDL_RenderCopy(renderer, t, NULL, &r);
+}
+}
+
+namespace polygon_mode {
+std::vector<Vec2> vertices;
+int vertices_size;
+int const ID = 1;
+SDL_Texture *t;
+SDL_Rect r;
+
+void click(Vec2 mtarget, bool ctrl_press) {
+    Vec2 new_point = set_target(mtarget, ctrl_press);
+    if ((int)vertices.size() <= vertices_size)
+        vertices.push_back(new_point);
+    else
+        vertices[vertices_size] = new_point;
+    vertices_size += 1;
+}
+
+void left() {
+    vertices_size -= 1;
+    vertices_size = Constrain(vertices_size, 0, (int)vertices.size());
+}
+
+void right() {
+    vertices_size += 1;
+    vertices_size = Constrain(vertices_size, 0, (int)vertices.size());
+}
+
+void escape() {
+    vertices.clear();
+    vertices_size = 0;
+}
+
+void space(std::vector<Region *> *solids) {
+    std::vector<Vec2> vbounds(vertices.begin(), vertices.begin() + vertices_size);
+    solids->push_back(new Convex(vbounds));
+    vertices.clear();
+    vertices_size = 0;
+}
+
+void draw_info(SDL_Renderer *renderer, Camera *camera, int mx, int my) {
+    SDL_RenderCopy(renderer, t, NULL, &r);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_Point points[vertices_size + 1];
+    for (int i = 0; i < vertices_size; i++) {
+        points[i] = camera->screen_transform(vertices[i]);
+        fill_circle(renderer, points[i].x, points[i].y, 7);
+    }
+    points[vertices_size] = {mx, my};
+    SDL_RenderDrawLines(renderer, points, vertices_size + 1);
+}
+}
+
+namespace circle_mode {
+int const ID = 2;
+SDL_Texture *t;
+SDL_Rect r;
+bool drawing = false;
+Vec2 center;
+
+void click(Vec2 mtarget, bool ctrl_press, std::vector<Region *> *solids) {
+    Vec2 new_point = set_target(mtarget, ctrl_press);
+    if (drawing)
+        solids->push_back(new Circle(center, Vec2::length(center - new_point)));
+    else
+        center = new_point;
+    drawing = !drawing;
+}
+
+void escape() { drawing = false; }
+
+void draw_info(SDL_Renderer *renderer, Camera *camera, int mx, int my) {
+    SDL_RenderCopy(renderer, t, NULL, &r);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    if (drawing) {
+        SDL_Point c = camera->screen_transform(center);
+        fill_circle(renderer, c.x, c.y, 7);
+        draw_circle(renderer, c.x, c.y,
+                    std::sqrt((c.x - mx) * (c.x - mx) + (c.y - my) * (c.y - my)));
+    }
+    SDL_RenderCopy(renderer, t, NULL, &r);
+}
+}
+
+namespace enemy_mode {
+int const ID = 3;
+SDL_Surface *s;
+SDL_Texture *t;
+SDL_Rect r;
+SDL_Rect rect;
+
+void click(Vec2 mtarget, bool ctrl_press, Timeline *timeline, World *world) {
+    Vec2 new_point = set_target(mtarget, ctrl_press);
+    EntityFactory *_enemy = new EntityFactory();
+    _enemy->lives({true, 200, 200})
+        ->moves({Vec2::zero, 3})
+        ->occupies({new Rectangle(new_point, {1, 1})});
+    timeline->add(new SpawnEnemy1(timeline->elapsed(), 10000, world, _enemy));
+}
+
+void draw_info(SDL_Renderer *renderer, Camera *camera, int mx, int my) {
+    rect.x = mx - rect.w / 2;
+    rect.y = my - rect.h / 2;
+    SDL_SetRenderDrawColor(renderer, 0xff, 0xb7, 0x4d, 255);
+    SDL_RenderDrawRect(renderer, &rect);
+    SDL_RenderCopy(renderer, t, NULL, &r);
+}
+}
+
 int main(int argc, char *argv[]) {
     SDL_Window *window;
     SDL_Renderer *renderer;
@@ -243,7 +396,7 @@ int main(int argc, char *argv[]) {
     EntityFactory *_player = new EntityFactory();
     _player->lives({true, 100, 100})
         ->moves({Vec2::zero, 10})
-        ->occupies({new PolygonRegion(Vec2::zero, new RectangularBounds({1, 1}))});
+        ->occupies({new Rectangle(Vec2::zero, {1, 1})});
     World world(_player->create(), &timeline);
     delete _player;
     Entity *player = world.player;
@@ -265,12 +418,26 @@ int main(int argc, char *argv[]) {
     }
 
     prev_ticks = SDL_GetTicks();
-    Camera camera = Camera(&world, Vec2(0, 0), new RectangularBounds(Vec2(10, 10)), &SCREEN_WIDTH,
-                           &SCREEN_HEIGHT);
+    Camera camera = Camera(new Rectangle(Vec2::zero, {10, 10}), &SCREEN_WIDTH, &SCREEN_HEIGHT);
 
-    std::vector<Position> vertices;
-    int vertices_size = 0;
-    std::vector<PolygonRegion *> *solids = map->solids();
+    SDL_Surface *s;
+    s = TTF_RenderText_Solid(FONT, "Rectangle", {255, 255, 255});
+    rectangle_mode::t = SDL_CreateTextureFromSurface(renderer, s);
+    rectangle_mode::r = {5, 5, s->w, s->h};
+    s = TTF_RenderText_Solid(FONT, "Polygon", {255, 255, 255});
+    polygon_mode::t = SDL_CreateTextureFromSurface(renderer, s);
+    polygon_mode::r = {5, 5, s->w, s->h};
+    s = TTF_RenderText_Solid(FONT, "Circle", {255, 255, 255});
+    circle_mode::t = SDL_CreateTextureFromSurface(renderer, s);
+    circle_mode::r = {5, 5, s->w, s->h};
+    s = TTF_RenderText_Solid(FONT, "Enemy", {255, 255, 255});
+    enemy_mode::t = SDL_CreateTextureFromSurface(renderer, s);
+    enemy_mode::r = {5, 5, s->w, s->h};
+    enemy_mode::rect = camera.screen_transform(new Rectangle({0, 0}, {1, 1}));
+    delete s;
+    int mode = polygon_mode::ID;
+
+    std::vector<Region *> *solids = &map->solids;
     bool ctrl_press = false;
     bool kup, kdown, kleft, kright;
     kup = kdown = kleft = kright = false;
@@ -290,15 +457,15 @@ int main(int argc, char *argv[]) {
         // screen mouse coordinates transformed to world coordinates
         Vec2 mtarget;
         {
-            double target_x = (camera.occupies.region->bounds()->size().x / SCREEN_WIDTH) *
+            double target_x = (camera.occupies.region->size().x / SCREEN_WIDTH) *
                               (mx +
-                               camera.occupies.region->position.x * SCREEN_WIDTH /
-                                   camera.occupies.region->bounds()->size().x -
+                               camera.occupies.region->center().x * SCREEN_WIDTH /
+                                   camera.occupies.region->size().x -
                                SCREEN_WIDTH / 2);
-            double target_y = (camera.occupies.region->bounds()->size().y / SCREEN_HEIGHT) *
+            double target_y = (camera.occupies.region->size().y / SCREEN_HEIGHT) *
                               (-my +
-                               camera.occupies.region->position.y * SCREEN_HEIGHT /
-                                   camera.occupies.region->bounds()->size().y +
+                               camera.occupies.region->center().y * SCREEN_HEIGHT /
+                                   camera.occupies.region->size().y +
                                SCREEN_HEIGHT / 2);
             mtarget = {target_x, target_y};
         }
@@ -306,14 +473,15 @@ int main(int argc, char *argv[]) {
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_MOUSEBUTTONDOWN) {
                 if (my < SCREEN_HEIGHT) {
-                    Vec2 new_point = mtarget;
-                    if (!ctrl_press)
-                        new_point = {std::round(mtarget.x), std::round(mtarget.y)};
-                    if ((int)vertices.size() <= vertices_size)
-                        vertices.push_back(new_point);
-                    else
-                        vertices[vertices_size] = new_point;
-                    vertices_size += 1;
+                    if (mode == rectangle_mode::ID) {
+                        rectangle_mode::click(mtarget, ctrl_press, solids);
+                    } else if (mode == polygon_mode::ID) {
+                        polygon_mode::click(mtarget, ctrl_press);
+                    } else if (mode == circle_mode::ID) {
+                        circle_mode::click(mtarget, ctrl_press, solids);
+                    } else if (mode == enemy_mode::ID) {
+                        enemy_mode::click(mtarget, ctrl_press, &timeline, &world);
+                    }
                 } else {
                     long long elapsed;
                     std::cin >> elapsed;
@@ -343,46 +511,23 @@ int main(int argc, char *argv[]) {
                     ctrl_press = true;
                     break;
                 case SDLK_ESCAPE:
-                    vertices.clear();
-                    vertices_size = 0;
+                    if (mode == polygon_mode::ID)
+                        polygon_mode::escape();
+                    else if (mode == circle_mode::ID)
+                        circle_mode::escape();
                     break;
                 case SDLK_SPACE: {
-                    std::vector<Position> vbounds(vertices.begin(),
-                                                  vertices.begin() + vertices_size);
-                    double l = std::numeric_limits<double>::max();
-                    double r = -std::numeric_limits<double>::max();
-                    double d = std::numeric_limits<double>::max();
-                    double u = -std::numeric_limits<double>::max();
-                    for (Position p : vbounds) {
-                        std::cout << l << ' ' << r << ' ' << u << ' ' << d << '\n';
-                        if (p.x < l)
-                            l = p.x;
-                        if (p.x > r)
-                            r = p.x;
-                        if (p.y < d)
-                            d = p.y;
-                        if (p.y > u)
-                            u = p.y;
-                    }
-                    std::cout << "Done: " << l << ' ' << r << ' ' << u << ' ' << d << "\n\n";
-                    const Position center = {(l + r) / 2, (u + d) / 2};
-                    for (auto it = vbounds.begin(); it != vbounds.end(); it++) {
-                        it->x -= center.x;
-                        it->y -= center.y;
-                    }
-                    solids->push_back(
-                        new PolygonRegion(center, new ConvexBounds(vbounds, {r - l, u - d})));
-                    vertices.clear();
-                    vertices_size = 0;
+                    if (mode == polygon_mode::ID)
+                        polygon_mode::space(solids);
                     break;
                 }
                 case SDLK_LEFT:
-                    vertices_size -= 1;
-                    vertices_size = Constrain(vertices_size, 0, (int)vertices.size());
+                    if (mode == polygon_mode::ID)
+                        polygon_mode::left();
                     break;
                 case SDLK_RIGHT:
-                    vertices_size += 1;
-                    vertices_size = Constrain(vertices_size, 0, (int)vertices.size());
+                    if (mode == polygon_mode::ID)
+                        polygon_mode::right();
                     break;
                 case SDLK_w:
                     kup = true;
@@ -428,14 +573,18 @@ int main(int argc, char *argv[]) {
                 case SDLK_g:
                     show_grid = !show_grid;
                     break;
-                case SDLK_1: {
-                    EntityFactory *_enemy = new EntityFactory();
-                    _enemy->lives({true, 200, 200})
-                        ->moves({Vec2::zero, 3})
-                        ->occupies({new PolygonRegion(mtarget, new RectangularBounds({1, 1}))});
-                    timeline.add(new SpawnEnemy1(timeline.elapsed(), 10000, &world, _enemy));
+                case SDLK_1:
+                    mode = rectangle_mode::ID;
                     break;
-                }
+                case SDLK_2:
+                    mode = polygon_mode::ID;
+                    break;
+                case SDLK_3:
+                    mode = circle_mode::ID;
+                    break;
+                case SDLK_4:
+                    mode = enemy_mode::ID;
+                    break;
                 default:
                     break;
                 }
@@ -491,7 +640,7 @@ int main(int argc, char *argv[]) {
 
         update_timer.update_now(SDL_GetTicks());
         update_timer.process();
-        camera.occupies.region->position = player->occupies.region->position;
+        camera.occupies.region->move_to(player->occupies.region->center());
 
         // change colour of beat box based on bpm
         unsigned long long now = SDL_GetTicks() - prog_start;
@@ -518,14 +667,14 @@ int main(int argc, char *argv[]) {
         SDL_RenderClear(renderer);
 
         SDL_Rect rect;
-        // draw bpm indicator
-        SDL_SetRenderDrawColor(renderer, tempo_color, 100, tempo_color, 255);
-        rect = {0, 0, 20, 20};
-        SDL_RenderFillRect(renderer, &rect);
-        // draw beat marker indicator
-        SDL_SetRenderDrawColor(renderer, beat_color, 255, beat_color, 255);
-        rect = {0, 20, 20, 20};
-        SDL_RenderFillRect(renderer, &rect);
+        // // draw bpm indicator
+        // SDL_SetRenderDrawColor(renderer, tempo_color, 100, tempo_color, 255);
+        // rect = {0, 0, 20, 20};
+        // SDL_RenderFillRect(renderer, &rect);
+        // // draw beat marker indicator
+        // SDL_SetRenderDrawColor(renderer, beat_color, 255, beat_color, 255);
+        // rect = {0, 20, 20, 20};
+        // SDL_RenderFillRect(renderer, &rect);
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
         // draw grid
@@ -535,58 +684,53 @@ int main(int argc, char *argv[]) {
         }
 
         // draw solids
-        for (unsigned int j = 0; j < map->solids()->size(); j++) {
+        for (unsigned int j = 0; j < map->solids.size(); j++) {
             // each shape has a new colour
             unsigned int col = (128 + j * 25) % 255;
             SDL_SetRenderDrawColor(renderer, col, col / 2, (col * 2) % 255, 255);
             // recording vertices, points, and axes
             // to draw   vertices, sides,  and normals
-            std::vector<Position> vertices = (*map->solids())[j]->vertices();
-            SDL_Point points[vertices.size() + 1];
-            std::vector<Vec2> axes = (*map->solids())[j]->bounds()->normals();
-            // draw the first point and normal
-            {
-                // drawing a normal
-                Position start = (vertices[0] + vertices[vertices.size() - 1]) * 0.5;
-                Position end = start + axes[0];
-                SDL_Point line[2];
-                line[0] = camera.screen_transform(start);
-                line[1] = camera.screen_transform(end);
-                SDL_RenderDrawLines(renderer, line, 2);
-                // drawing a point
-                points[0] = camera.screen_transform(vertices[0]);
-                fill_circle(renderer, points[0].x, points[0].y, 3);
+            if (auto s = dynamic_cast<Convex *>(map->solids[j])) {
+                std::vector<Vec2> vertices = s->vertices();
+                SDL_Point points[vertices.size() + 1];
+                std::vector<Vec2> axes = s->normals();
+                // draw the first point and normal
+                {
+                    // drawing a normal
+                    Position start = (vertices[0] + vertices[vertices.size() - 1]) * 0.5;
+                    Position end = start + axes[0];
+                    SDL_Point line[2];
+                    line[0] = camera.screen_transform(start);
+                    line[1] = camera.screen_transform(end);
+                    SDL_RenderDrawLines(renderer, line, 2);
+                    // drawing a point
+                    points[0] = camera.screen_transform(vertices[0]);
+                    fill_circle(renderer, points[0].x, points[0].y, 3);
+                }
+                // draw the remaining points, edges, and and normals
+                for (unsigned int i = 1; i < vertices.size(); i++) {
+                    // drawing a normal
+                    Position start = (vertices[i] + vertices[i - 1]) * 0.5;
+                    Position end = start + axes[i];
+                    SDL_Point line[2];
+                    line[0] = camera.screen_transform(start);
+                    line[1] = camera.screen_transform(end);
+                    SDL_RenderDrawLines(renderer, line, 2);
+                    // drawing a point
+                    points[i] = camera.screen_transform(vertices[i]);
+                    fill_circle(renderer, points[i].x, points[i].y, 3);
+                }
+                // drawing the sides
+                points[vertices.size()] = points[0];
+                SDL_RenderDrawLines(renderer, points, vertices.size() + 1);
+            } else if (auto s = dynamic_cast<Circle *>(map->solids[j])) {
+                SDL_Rect rect = camera.screen_transform(s);
+                SDL_Point center = camera.screen_transform(s->center());
+                draw_circle(renderer, center.x, center.y, rect.w / 2);
             }
-            // draw the remaining points, edges, and and normals
-            for (unsigned int i = 1; i < axes.size(); i++) {
-                // drawing a normal
-                Position start = (vertices[i] + vertices[i - 1]) * 0.5;
-                Position end = start + axes[i];
-                SDL_Point line[2];
-                line[0] = camera.screen_transform(start);
-                line[1] = camera.screen_transform(end);
-                SDL_RenderDrawLines(renderer, line, 2);
-                // drawing a point
-                points[i] = camera.screen_transform(vertices[i]);
-                fill_circle(renderer, points[i].x, points[i].y, 3);
-            }
-            // drawing the sides
-            points[vertices.size()] = points[0];
-            SDL_RenderDrawLines(renderer, points, vertices.size() + 1);
             // drawing the "might collide" box
-            SDL_Rect rect = camera.screen_transform((*map->solids())[j]);
+            SDL_Rect rect = camera.screen_transform(map->solids[j]);
             SDL_RenderDrawRect(renderer, &rect);
-        }
-        // drawing current construction
-        {
-            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-            SDL_Point points[vertices_size + 1];
-            for (int i = 0; i < vertices_size; i++) {
-                points[i] = camera.screen_transform(vertices[i]);
-                fill_circle(renderer, points[i].x, points[i].y, 7);
-            }
-            points[vertices_size] = {mx, my};
-            SDL_RenderDrawLines(renderer, points, vertices_size + 1);
         }
 
         // draw entities
@@ -606,27 +750,32 @@ int main(int argc, char *argv[]) {
             } else {
                 fill_circle(renderer, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
             }
-            // if (e->is_comp[Entity::LIVES] != 0) {
-            //     SDL_Rect full_hp_bar = {rect.x, rect.y - 10, rect.w, 5};
-            //     SDL_Rect hp_bar = {
-            //         rect.x, rect.y - 10,
-            //         (int)(rect.w * e->lives.health / e->lives.max_health),
-            //         5};
-            //     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-            //     SDL_RenderFillRect(renderer, &full_hp_bar);
-            //     SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-            //     SDL_RenderFillRect(renderer, &hp_bar);
-            //     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-            // }
         }
 
         // draw projectiles
         SDL_SetRenderDrawColor(renderer, 25, 80, 255, 255);
         for (Projectile p : world.projectiles) {
             SDL_Rect rect;
-            Region *r = new Region(p.position, new CircularBounds(0.1));
+            Circle *r = new Circle(p.position, 0.1);
             rect = camera.screen_transform(r);
             fill_circle(renderer, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
+        }
+
+        switch (mode) {
+        case rectangle_mode::ID:
+            rectangle_mode::draw_info(renderer, &camera, mx, my);
+            break;
+        case polygon_mode::ID:
+            polygon_mode::draw_info(renderer, &camera, mx, my);
+            break;
+        case circle_mode::ID:
+            circle_mode::draw_info(renderer, &camera, mx, my);
+            break;
+        case enemy_mode::ID:
+            enemy_mode::draw_info(renderer, &camera, mx, my);
+            break;
+        default:
+            break;
         }
 
         draw_timeline(renderer, &timeline, {0, SCREEN_HEIGHT, SCREEN_WIDTH, 50}, framewidth, start,

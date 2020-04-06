@@ -14,12 +14,12 @@
 #include <limits>
 #include <vector>
 
-#include "bounds.hpp"
 #include "camera.hpp"
 #include "debug.hpp"
 #include "effect.hpp"
 #include "entity.hpp"
 #include "map.hpp"
+#include "region.hpp"
 #include "spell.hpp"
 #include "timeline.hpp"
 #include "vec.hpp"
@@ -27,6 +27,14 @@
 
 #define SAMPLE_RATE 44100
 // using namespace essentia;
+
+void draw_circle(SDL_Renderer *renderer, int cx, int cy, int radius) {
+    for (int i = -radius; i <= radius; i++) {
+        int height = (int)std::sqrt(radius * radius - i * i);
+        SDL_RenderDrawPoint(renderer, cx + i, cy - height);
+        SDL_RenderDrawPoint(renderer, cx + i, cy + height);
+    }
+}
 
 /**
  * Places a filled circle onto the renderer.
@@ -55,10 +63,10 @@ void draw_grid(SDL_Renderer *renderer, Camera *camera, int width, int height) {
     // j contains the leftmost integer grid position
     int j = 0;
     double gp = 0;
-    Vec2 camera_position = camera->occupies.region->position;
-    Vec2 camera_size = camera->occupies.region->bounds()->size();
+    Vec2 camera_position = camera->occupies.region->center();
+    Vec2 camera_size = camera->occupies.region->size();
     // j is calculated for width here
-    if (camera->occupies.region->position.x - camera_size.x / 2 > 0)
+    if (camera_position.x - camera_size.x / 2 > 0)
         j = std::ceil(camera_position.x - camera_size.x / 2);
     else
         j = 1 + std::floor(camera_position.x - camera_size.x / 2);
@@ -114,6 +122,11 @@ void analyse_song(std::string filename, Real *bpm, std::vector<Real> *ticks) {
     delete rhythm_extractor;
 }
 */
+
+bool fexists(const std::string &filename) {
+    std::ifstream ifile(filename.c_str());
+    return (bool)ifile;
+}
 
 // argc, argv not used
 int main(int argc, char *argv[]) {
@@ -177,21 +190,21 @@ int main(int argc, char *argv[]) {
     EntityFactory *_player = new EntityFactory();
     _player->lives({true, 100, 100})
         ->moves({Vec2::zero, 10})
-        ->occupies({new PolygonRegion(Vec2::zero, new RectangularBounds({1, 1}))});
+        ->occupies({new Rectangle(Vec2::zero, {1, 1})});
     World world(_player->create(), &timeline);
     delete _player;
     Entity *player = world.player;
     player->name = "player";
     Map *map = &world.map;
-    {
+    if (fexists(argv[1])) {
         std::ifstream mapfile;
-        mapfile.open("dabb.map", std::ios::binary);
+        mapfile.open(argv[1], std::ios::binary);
         map->read(&mapfile);
         mapfile.close();
     }
-    {
+    if (fexists(argv[2])) {
         std::ifstream timefile;
-        timefile.open("dabb.time", std::ios::binary);
+        timefile.open(argv[2], std::ios::binary);
         timeline.read(&timefile);
         timefile.close();
     }
@@ -213,8 +226,7 @@ int main(int argc, char *argv[]) {
     teleport_spell.source = player;
 
     prev_ticks = SDL_GetTicks();
-    Camera camera = Camera(&world, Vec2(0, 0), new RectangularBounds(Vec2(10, 10)), &SCREEN_WIDTH,
-                           &SCREEN_HEIGHT);
+    Camera camera = Camera(new Rectangle(Vec2::zero, {10, 10}), &SCREEN_WIDTH, &SCREEN_HEIGHT);
 
     bool kup, kdown, kleft, kright;
     kup = kdown = kleft = kright = false;
@@ -229,15 +241,15 @@ int main(int argc, char *argv[]) {
         // screen mouse coordinates transformed to world coordinates
         Vec2 mtarget;
         {
-            double target_x = (camera.occupies.region->bounds()->size().x / SCREEN_WIDTH) *
+            double target_x = (camera.occupies.region->size().x / SCREEN_WIDTH) *
                               (mx +
-                               camera.occupies.region->position.x * SCREEN_WIDTH /
-                                   camera.occupies.region->bounds()->size().x -
+                               camera.occupies.region->center().x * SCREEN_WIDTH /
+                                   camera.occupies.region->size().x -
                                SCREEN_WIDTH / 2);
-            double target_y = (camera.occupies.region->bounds()->size().y / SCREEN_HEIGHT) *
+            double target_y = (camera.occupies.region->size().y / SCREEN_HEIGHT) *
                               (-my +
-                               camera.occupies.region->position.y * SCREEN_HEIGHT /
-                                   camera.occupies.region->bounds()->size().y +
+                               camera.occupies.region->center().y * SCREEN_HEIGHT /
+                                   camera.occupies.region->size().y +
                                SCREEN_HEIGHT / 2);
             mtarget = {target_x, target_y};
         }
@@ -271,34 +283,29 @@ int main(int argc, char *argv[]) {
                     break;
                     // adjust camera position using arrow keys
                 case SDLK_UP:
-                    camera.occupies.region->position.y +=
-                        camera.occupies.region->bounds()->size().y / 10;
+                    camera.occupies.region->translate({0, camera.occupies.region->size().y / 10});
                     break;
                 case SDLK_DOWN:
-                    camera.occupies.region->position.y +=
-                        -camera.occupies.region->bounds()->size().y / 10;
+                    camera.occupies.region->translate({0, -camera.occupies.region->size().y / 10});
                     break;
                 case SDLK_LEFT:
-                    camera.occupies.region->position.x +=
-                        -camera.occupies.region->bounds()->size().x / 10;
+                    camera.occupies.region->translate({-camera.occupies.region->size().x / 10, 0});
                     break;
                 case SDLK_RIGHT:
-                    camera.occupies.region->position.x +=
-                        camera.occupies.region->bounds()->size().x / 10;
+                    camera.occupies.region->translate({camera.occupies.region->size().x / 10, 0});
                     break;
-                    // toggles grid
                 case SDLK_g:
                     show_grid = !show_grid;
                     break;
                 case SDLK_1:
-                    damage_spell.region->position = mtarget;
+                    damage_spell.position = mtarget;
                     damage_spell.use(&world);
                     break;
                 case SDLK_2:
                     speed_spell.use(&world);
                     break;
                 case SDLK_3:
-                    teleport_spell.region->position = mtarget;
+                    teleport_spell.position = mtarget;
                     teleport_spell.use(&world);
                     break;
                 default:
@@ -367,21 +374,12 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        // moves players, projectiles, kills dead entities, etc.
-        world.clean_up();
-
         // clear screen, beginning the drawing cycle
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
-        /*
-        // indicate if player collided with a solid
-        if (collided) {
-            SDL_Rect rect = {0, 40, 20, 20};
-            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-            SDL_RenderFillRect(renderer, &rect);
-        }
-        */
+        // moves players, projectiles, kills dead entities, etc.
+        world.clean_up(renderer, &camera);
 
         SDL_Rect rect;
         // draw bpm indicator
@@ -401,46 +399,52 @@ int main(int argc, char *argv[]) {
         }
 
         // draw solids
-        for (unsigned int j = 0; j < map->solids()->size(); j++) {
+        for (unsigned int j = 0; j < map->solids.size(); j++) {
             // each shape has a new colour
             unsigned int col = (128 + j * 25) % 255;
             SDL_SetRenderDrawColor(renderer, col, col / 2, (col * 2) % 255, 255);
             // recording vertices, points, and axes
             // to draw   vertices, sides,  and normals
-            std::vector<Position> vertices = (*map->solids())[j]->vertices();
-            SDL_Point points[vertices.size() + 1];
-            std::vector<Vec2> axes = (*map->solids())[j]->bounds()->normals();
-            // draw the first point and normal
-            {
-                // drawing a normal
-                Position start = (vertices[0] + vertices[vertices.size() - 1]) * 0.5;
-                Position end = start + axes[0];
-                SDL_Point line[2];
-                line[0] = camera.screen_transform(start);
-                line[1] = camera.screen_transform(end);
-                SDL_RenderDrawLines(renderer, line, 2);
-                // drawing a point
-                points[0] = camera.screen_transform(vertices[0]);
-                fill_circle(renderer, points[0].x, points[0].y, 3);
+            if (auto s = dynamic_cast<Convex *>(map->solids[j])) {
+                std::vector<Vec2> vertices = s->vertices();
+                SDL_Point points[vertices.size() + 1];
+                std::vector<Vec2> axes = s->normals();
+                // draw the first point and normal
+                {
+                    // drawing a normal
+                    Position start = (vertices[0] + vertices[vertices.size() - 1]) * 0.5;
+                    Position end = start + axes[0];
+                    SDL_Point line[2];
+                    line[0] = camera.screen_transform(start);
+                    line[1] = camera.screen_transform(end);
+                    SDL_RenderDrawLines(renderer, line, 2);
+                    // drawing a point
+                    points[0] = camera.screen_transform(vertices[0]);
+                    fill_circle(renderer, points[0].x, points[0].y, 3);
+                }
+                // draw the remaining points, edges, and and normals
+                for (unsigned int i = 1; i < vertices.size(); i++) {
+                    // drawing a normal
+                    Position start = (vertices[i] + vertices[i - 1]) * 0.5;
+                    Position end = start + axes[i];
+                    SDL_Point line[2];
+                    line[0] = camera.screen_transform(start);
+                    line[1] = camera.screen_transform(end);
+                    SDL_RenderDrawLines(renderer, line, 2);
+                    // drawing a point
+                    points[i] = camera.screen_transform(vertices[i]);
+                    fill_circle(renderer, points[i].x, points[i].y, 3);
+                }
+                // drawing the sides
+                points[vertices.size()] = points[0];
+                SDL_RenderDrawLines(renderer, points, vertices.size() + 1);
+            } else if (auto s = dynamic_cast<Circle *>(map->solids[j])) {
+                SDL_Rect rect = camera.screen_transform(s);
+                SDL_Point center = camera.screen_transform(s->center());
+                draw_circle(renderer, center.x, center.y, rect.w / 2);
             }
-            // draw the remaining points, edges, and and normals
-            for (unsigned int i = 1; i < axes.size(); i++) {
-                // drawing a normal
-                Position start = (vertices[i] + vertices[i - 1]) * 0.5;
-                Position end = start + axes[i];
-                SDL_Point line[2];
-                line[0] = camera.screen_transform(start);
-                line[1] = camera.screen_transform(end);
-                SDL_RenderDrawLines(renderer, line, 2);
-                // drawing a point
-                points[i] = camera.screen_transform(vertices[i]);
-                fill_circle(renderer, points[i].x, points[i].y, 3);
-            }
-            // drawing the sides
-            points[vertices.size()] = points[0];
-            SDL_RenderDrawLines(renderer, points, vertices.size() + 1);
             // drawing the "might collide" box
-            SDL_Rect rect = camera.screen_transform((*map->solids())[j]);
+            SDL_Rect rect = camera.screen_transform(map->solids[j]);
             SDL_RenderDrawRect(renderer, &rect);
         }
 
@@ -454,6 +458,7 @@ int main(int argc, char *argv[]) {
             // draw the player as a red square instead of a white circle
             if (e == player) {
                 SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+                // fill_circle(renderer, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
                 SDL_RenderFillRect(renderer, &rect);
                 SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
             } else {
@@ -475,7 +480,7 @@ int main(int argc, char *argv[]) {
         SDL_SetRenderDrawColor(renderer, 25, 80, 255, 255);
         for (Projectile p : world.projectiles) {
             SDL_Rect rect;
-            Region *r = new Region(p.position, new CircularBounds(0.1));
+            Region *r = new Circle(p.position, 0.1);
             rect = camera.screen_transform(r);
             fill_circle(renderer, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
         }

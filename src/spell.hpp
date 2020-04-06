@@ -12,7 +12,8 @@ class Spell {
     enum Type { SELF, ENTITY_TARGET, POINT_TARGET, REGION, PROJECTILE };
     Type type;
     std::vector<Effect *> effects;
-    Region *region = new Region(Vec2::zero, new CircularBounds(0));
+    Region *region = new Circle(Vec2::zero, 0);
+    Vec2 position = Vec2::zero;
     Entity *target;
     Entity *source;
     void use(World *world);

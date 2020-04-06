@@ -12,7 +12,7 @@ void Spell::use(World *world) {
         break;
     case POINT_TARGET:
         for (Effect *e : effects) {
-            e->point = region->position;
+            e->point = position;
             world->timeline->add(e->clone(), 0);
         }
         break;
@@ -32,8 +32,8 @@ void Spell::use(World *world) {
     case PROJECTILE: {
         Projectile p;
         p.source = source;
-        p.position = source->occupies.region->position;
-        p.velocity = Vec2::normalize(region->position - source->occupies.region->position);
+        p.position = source->occupies.region->center();
+        p.velocity = Vec2::normalize(position - source->occupies.region->center());
         p.speed = 15;
         p.max_hit = 1;
         p.on_hit = &effects;

@@ -16,8 +16,7 @@ void Entity::move(double duration) {
         return;
     // std::cout << duration << " - Moved " << name << ": " << moves.speed *
     // duration * moves.velocity << '\n';
-    Vec2 *p = &occupies.region->position;
-    *p = *p + moves.speed * duration * moves.velocity;
+    occupies.region->translate(moves.speed * duration * moves.velocity);
 }
 
 std::ostream &operator<<(std::ostream &os, Entity const &e) {

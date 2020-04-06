@@ -69,7 +69,7 @@ Teleport *Teleport::clone() {
     return other;
 }
 
-void Teleport::start(Entity *e) { e->occupies.region->position = point; }
+void Teleport::start(Entity *e) { e->occupies.region->move_to(point); }
 
 void Teleport::pulse(Entity *e) {}
 void Teleport::stop(Entity *e) {}
