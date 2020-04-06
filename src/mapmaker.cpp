@@ -338,7 +338,8 @@ int main(int argc, char *argv[]) {
     int SCREEN_WIDTH = 500, SCREEN_HEIGHT = 500;
 
     // SOUND STUFF
-    std::string music_file = "./music/mt. fujitive - trees.mp3";
+    std::string music_file =
+        "./music/The_Polish_Ambassador__Nitty_Scott_-_02_-_Chill_or_Be_Chilled.mp3";
     double bpm = 100;
     std::vector<double> ticks;
     {

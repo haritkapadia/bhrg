@@ -1,6 +1,8 @@
 *.out
-build/*
-music/*
+build/*.o
+build/mapmaker*
+build/bhrg*
+music/C*
 TAGS
 #*#
 *.ttf

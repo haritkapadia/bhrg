@@ -139,7 +139,8 @@ int main(int argc, char *argv[]) {
     debug::print("I love debugging!");
 
     // SOUND STUFF
-    std::string music_file = "./music/mt. fujitive - trees.mp3";
+    std::string music_file =
+        "./music/The_Polish_Ambassador__Nitty_Scott_-_02_-_Chill_or_Be_Chilled.mp3";
     // essentia::init();
     // essentia::Pool pool;
     // essentia::Real bpm = 80;
