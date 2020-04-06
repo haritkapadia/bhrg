@@ -1,6 +1,6 @@
 # Bullet Hell Rhythm Game
 
-This is a bullet hell rhythm game. In the futute, most actions will be synced to accompanying background music.
+This is a bullet hell rhythm game. In the future, most actions will be synced to accompanying background music.
 
 ## NO READING, ONLY DEMO!!!
 
