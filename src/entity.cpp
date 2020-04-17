@@ -3,14 +3,6 @@
 
 Entity::Entity() {}
 
-Entity::Entity(Entity const &e) {
-    is_comp = e.is_comp;
-    name = e.name;
-    lives = e.lives;
-    moves = e.moves;
-    occupies = e.occupies;
-}
-
 void Entity::move(double duration) {
     if (moves.velocity == Vec2::zero)
         return;
@@ -30,6 +22,9 @@ std::ostream &operator<<(std::ostream &os, Entity const &e) {
     if (e.is_comp[Entity::OCCUPIES]) {
         os << "Occupies: " << e.occupies << "; ";
     }
+    if (e.is_comp[Entity::TEXTURED]) {
+        os << "Textured: " << e.textured << "; ";
+    }
     return os << "]";
 }
 std::ostream &operator<<(std::ostream &os, Entity::Lives const &l) {
@@ -42,6 +37,10 @@ std::ostream &operator<<(std::ostream &os, Entity::Moves const &l) {
 }
 std::ostream &operator<<(std::ostream &os, Entity::Occupies const &l) {
     return os << "occupies: " << *l.region;
+}
+
+std::ostream &operator<<(std::ostream &os, Entity::Textured const &l) {
+    return os << "textured: " << *l.texture;
 }
 
 Entity EntityFactory::create() { return e; }
@@ -58,5 +57,10 @@ EntityFactory *EntityFactory::moves(Entity::Moves _moves) {
 EntityFactory *EntityFactory::occupies(Entity::Occupies _occupies) {
     e.occupies = _occupies;
     e.is_comp.set(Entity::OCCUPIES);
+    return this;
+}
+EntityFactory *EntityFactory::textured(Entity::Textured _textured) {
+    e.textured = _textured;
+    e.is_comp.set(Entity::TEXTURED);
     return this;
 }

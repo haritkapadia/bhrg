@@ -26,6 +26,7 @@ class Timeline : public Stopwatch {
   public:
     static const std::array<std::string, 2> KNOWN_EVENT;
     World *world;
+    // this would be a good place to use unique_ptr
     std::vector<Event *> future;
     std::vector<Event *> present;
     void process();

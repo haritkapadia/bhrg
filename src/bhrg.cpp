@@ -1,6 +1,7 @@
 // UNORDERED_SET IN WORLD PROJECTILES KILLS THE PROGRAM AHHHH!!!!
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
 #include <algorithm>
 #include <cmath>
@@ -134,7 +135,7 @@ int main(int argc, char *argv[]) {
     SDL_Renderer *renderer;
     Mix_Music *music; // Music playing for SDL
     bool running = false;
-    int SCREEN_WIDTH = 500, SCREEN_HEIGHT = 500;
+    int SCREEN_WIDTH = 1600, SCREEN_HEIGHT = 800;
 
     debug::print("I love debugging!");
 
@@ -177,6 +178,11 @@ int main(int argc, char *argv[]) {
         std::cerr << "Could not load music. ";
         std::cerr << "Mix_Error: " << Mix_GetError() << '\n';
     }
+    // load textures
+    {
+        Texture::create_global_texture("Player", new Texture(renderer, "img/player.png"));
+        Texture::create_global_texture("SpawnEnemy1", new Texture(renderer, "img/enemy.png"));
+    }
 
     running = true;
     Mix_PlayMusic(music, 0);
@@ -191,7 +197,8 @@ int main(int argc, char *argv[]) {
     EntityFactory *_player = new EntityFactory();
     _player->lives({true, 100, 100})
         ->moves({Vec2::zero, 10})
-        ->occupies({new Rectangle(Vec2::zero, {1, 1})});
+        ->occupies({new Rectangle(Vec2::zero, {0.5, 0.5})})
+        ->textured({Texture::global_texture("Player")});
     World world(_player->create(), &timeline);
     delete _player;
     Entity *player = world.player;
@@ -227,7 +234,7 @@ int main(int argc, char *argv[]) {
     teleport_spell.source = player;
 
     prev_ticks = SDL_GetTicks();
-    Camera camera = Camera(new Rectangle(Vec2::zero, {10, 10}), &SCREEN_WIDTH, &SCREEN_HEIGHT);
+    Camera camera = Camera(new Rectangle(Vec2::zero, {20, 10}), &SCREEN_WIDTH, &SCREEN_HEIGHT);
 
     bool kup, kdown, kleft, kright;
     kup = kdown = kleft = kright = false;
@@ -456,15 +463,17 @@ int main(int argc, char *argv[]) {
         for (Entity *e : entities) {
             SDL_Rect rect;
             rect = camera.screen_transform(e->occupies.region);
-            // draw the player as a red square instead of a white circle
-            if (e == player) {
-                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-                // fill_circle(renderer, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
-                SDL_RenderFillRect(renderer, &rect);
-                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-            } else {
-                fill_circle(renderer, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
-            }
+            // // draw the player as a red square instead of a white circle
+            // if (e == player) {
+            //     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+            //     // fill_circle(renderer, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
+            //     SDL_RenderFillRect(renderer, &rect);
+            //     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+            // } else {
+            //     fill_circle(renderer, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
+            // }
+            e->textured.texture->rect = rect;
+            e->textured.texture->draw();
             if (e->is_comp[Entity::LIVES] != 0) {
                 SDL_Rect full_hp_bar = {rect.x, rect.y - 10, rect.w, 5};
                 SDL_Rect hp_bar = {rect.x, rect.y - 10,

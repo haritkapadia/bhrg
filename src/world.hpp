@@ -32,9 +32,7 @@ struct Projectile {
 
 class World {
   private:
-    bool test_collide(Entity *e, std::vector<Projectile>::iterator p);
-    int apply_projectile_hit(Entity *e, std::vector<Projectile>::iterator p, Timeline *timeline,
-                             std::vector<Entity *> *temp_hit);
+    std::list<Entity> dead_entities;
 
   public:
     World(Entity player, Timeline *timeline);

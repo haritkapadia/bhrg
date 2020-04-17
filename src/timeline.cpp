@@ -51,8 +51,7 @@ void Timeline::process() {
     }
     // Add events that have reached the present to the running events
     Event *e;
-    while (!future.empty() && (e = future[0])->start < elapsed) {
-        std::pop_heap(future.begin(), future.end());
+    while (!future.empty() && (e = *(future.end() - 1))->start < elapsed) {
         future.pop_back();
         e->act(0);
         // instant events have 0 duration
@@ -63,8 +62,9 @@ void Timeline::process() {
 }
 
 void Timeline::add(Event *e) {
-    future.push_back(e);
-    std::push_heap(future.begin(), future.end());
+    auto it = std::upper_bound(future.rbegin(), future.rend(), e,
+                               [](Event *const &l, Event *const &r) { return *l < *r; });
+    future.insert(it.base(), e);
 }
 
 void Timeline::add(Event *e, unsigned long long dt) {
@@ -94,7 +94,10 @@ void Timeline::read(std::istream *fin) {
             EntityFactory *_enemy = new EntityFactory();
             _enemy->lives({true, 200, 200})
                 ->moves({Vec2::zero, speed})
-                ->occupies({new Circle(start, 0.5)});
+                ->occupies({new Circle(start, 0.5)})
+                ->textured({Texture::global_texture("SpawnEnemy1")});
+            debug::print("Will spawn enemy at", time_start, "for", duration, "near", start,
+                         "moving at", speed, "speed");
             add(new SpawnEnemy1(time_start, duration, world, _enemy));
             break;
         }

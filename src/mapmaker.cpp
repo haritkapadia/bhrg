@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <vector>
 
 #include "camera.hpp"
@@ -20,6 +21,7 @@
 #include "map.hpp"
 #include "region.hpp"
 #include "spell.hpp"
+#include "texture.hpp"
 #include "timeline.hpp"
 #include "vec.hpp"
 #include "world.hpp"
@@ -28,6 +30,8 @@
 // using namespace essentia;
 
 TTF_Font *FONT = NULL;
+SDL_Color BLACK = {0, 0, 0};
+SDL_Color WHITE = {255, 255, 255};
 
 void draw_circle(SDL_Renderer *renderer, int cx, int cy, int radius) {
     for (int i = -radius; i <= radius; i++) {
@@ -87,13 +91,6 @@ void draw_grid(SDL_Renderer *renderer, Camera *camera, int width, int height) {
     }
 }
 
-void write_text(SDL_Renderer *renderer, int x, int y, SDL_Color color, std::string text) {
-    SDL_Surface *s = TTF_RenderText_Solid(FONT, text.c_str(), color);
-    SDL_Texture *t = SDL_CreateTextureFromSurface(renderer, s);
-    SDL_Rect r = {x, y, s->w, s->h};
-    SDL_RenderCopy(renderer, t, NULL, &r);
-}
-
 void draw_timeline(SDL_Renderer *renderer, Timeline *timeline, SDL_Rect bounds,
                    long long framewidth, long long start, long long interval) {
     SDL_Rect rect = bounds;
@@ -108,7 +105,7 @@ void draw_timeline(SDL_Renderer *renderer, Timeline *timeline, SDL_Rect bounds,
         // I would use std::to_string but that function is broken on my MinGW compiler
         char numtext[31];
         std::sprintf(numtext, "%lld", start + i);
-        write_text(renderer, line_x, bounds.y, {0, 0, 0}, numtext);
+        Texture::draw_text(renderer, numtext, FONT, BLACK, line_x, bounds.y);
     }
     SDL_SetRenderDrawColor(renderer, 0xe3, 0x33, 0x71, 255);
     for (Event *e : timeline->future) {
@@ -155,13 +152,13 @@ void draw_events(SDL_Renderer *renderer, Timeline *timeline, Camera *camera, int
                 SDL_RenderFillRect(renderer, &rect);
                 char numtext[100] = "Start: ";
                 std::sprintf(numtext + 7, "%lld", e->start);
-                write_text(renderer, rect.x + 5, rect.y + 5, black, numtext);
+                Texture::draw_text(renderer, numtext, FONT, BLACK, rect.x + 5, rect.y + 5);
                 std::strcpy(numtext, "Duration: ");
                 std::sprintf(numtext + 10, "%llu", e->duration);
-                write_text(renderer, rect.x + 5, rect.y + 15, black, numtext);
+                Texture::draw_text(renderer, numtext, FONT, BLACK, rect.x + 5, rect.y + 15);
                 std::strcpy(numtext, "Speed: ");
                 std::sprintf(numtext + 7, "%.3llf", e->_enemy->e.moves.speed);
-                write_text(renderer, rect.x + 5, rect.y + 25, black, numtext);
+                Texture::draw_text(renderer, numtext, FONT, BLACK, rect.x + 5, rect.y + 25);
             }
             break;
         }
@@ -185,8 +182,7 @@ Vec2 set_target(Vec2 mtarget, bool round) {
 
 namespace rectangle_mode {
 int const ID = 0;
-SDL_Texture *t;
-SDL_Rect r;
+Texture *t;
 bool drawing = false;
 Vec2 start;
 
@@ -208,7 +204,7 @@ void click(Vec2 mtarget, bool ctrl_press, std::vector<Region *> *solids) {
 void escape() { drawing = false; }
 
 void draw_info(SDL_Renderer *renderer, Camera *camera, int mx, int my) {
-    SDL_RenderCopy(renderer, t, NULL, &r);
+    t->draw();
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     if (drawing) {
         SDL_Point c = camera->screen_transform(start);
@@ -219,7 +215,6 @@ void draw_info(SDL_Renderer *renderer, Camera *camera, int mx, int my) {
         out.h = std::max(c.y, my) - out.y;
         SDL_RenderDrawRect(renderer, &out);
     }
-    SDL_RenderCopy(renderer, t, NULL, &r);
 }
 }
 
@@ -227,8 +222,7 @@ namespace polygon_mode {
 std::vector<Vec2> vertices;
 int vertices_size;
 int const ID = 1;
-SDL_Texture *t;
-SDL_Rect r;
+Texture *t;
 
 void click(Vec2 mtarget, bool ctrl_press) {
     Vec2 new_point = set_target(mtarget, ctrl_press);
@@ -262,7 +256,7 @@ void space(std::vector<Region *> *solids) {
 }
 
 void draw_info(SDL_Renderer *renderer, Camera *camera, int mx, int my) {
-    SDL_RenderCopy(renderer, t, NULL, &r);
+    t->draw();
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_Point points[vertices_size + 1];
     for (int i = 0; i < vertices_size; i++) {
@@ -276,8 +270,7 @@ void draw_info(SDL_Renderer *renderer, Camera *camera, int mx, int my) {
 
 namespace circle_mode {
 int const ID = 2;
-SDL_Texture *t;
-SDL_Rect r;
+Texture *t;
 bool drawing = false;
 Vec2 center;
 
@@ -293,7 +286,7 @@ void click(Vec2 mtarget, bool ctrl_press, std::vector<Region *> *solids) {
 void escape() { drawing = false; }
 
 void draw_info(SDL_Renderer *renderer, Camera *camera, int mx, int my) {
-    SDL_RenderCopy(renderer, t, NULL, &r);
+    t->draw();
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     if (drawing) {
         SDL_Point c = camera->screen_transform(center);
@@ -301,32 +294,29 @@ void draw_info(SDL_Renderer *renderer, Camera *camera, int mx, int my) {
         draw_circle(renderer, c.x, c.y,
                     std::sqrt((c.x - mx) * (c.x - mx) + (c.y - my) * (c.y - my)));
     }
-    SDL_RenderCopy(renderer, t, NULL, &r);
 }
 }
 
 namespace enemy_mode {
 int const ID = 3;
-SDL_Surface *s;
-SDL_Texture *t;
-SDL_Rect r;
-SDL_Rect rect;
+Texture *t;
 
 void click(Vec2 mtarget, bool ctrl_press, Timeline *timeline, World *world) {
-    Vec2 new_point = set_target(mtarget, ctrl_press);
+    // Vec2 new_point = set_target(mtarget, ctrl_press);
     EntityFactory *_enemy = new EntityFactory();
     _enemy->lives({true, 200, 200})
         ->moves({Vec2::zero, 3})
-        ->occupies({new Rectangle(new_point, {1, 1})});
+        ->occupies({new Rectangle(mtarget, {1, 1})});
     timeline->add(new SpawnEnemy1(timeline->elapsed(), 10000, world, _enemy));
 }
 
 void draw_info(SDL_Renderer *renderer, Camera *camera, int mx, int my) {
+    t->draw();
+    SDL_Rect rect = camera->screen_transform(new Rectangle({0, 0}, {1, 1}));
     rect.x = mx - rect.w / 2;
     rect.y = my - rect.h / 2;
     SDL_SetRenderDrawColor(renderer, 0xff, 0xb7, 0x4d, 255);
     SDL_RenderDrawRect(renderer, &rect);
-    SDL_RenderCopy(renderer, t, NULL, &r);
 }
 }
 
@@ -363,15 +353,20 @@ int main(int argc, char *argv[]) {
         std::cerr << "SDL_Error: " << SDL_GetError() << '\n';
     }
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     if (TTF_Init() < 0) {
         std::cerr << "Could not create TTF loader. ";
         std::cerr << "TTF_Error: " << TTF_GetError() << '\n';
     }
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     FONT = TTF_OpenFont("calibri.ttf", 12);
     if (FONT == NULL) {
         std::cerr << "Could not load font. ";
         std::cerr << "TTF_Error: " << TTF_GetError() << '\n';
+    }
+    int img_flags = IMG_INIT_PNG;
+    if (!(IMG_Init(img_flags) & img_flags)) {
+        std::cerr << "Could not create image loader. ";
+        std::cerr << "IMG_Error: " << IMG_GetError() << '\n';
     }
     if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
         std::cerr << "Could not create mixer. ";
@@ -381,6 +376,11 @@ int main(int argc, char *argv[]) {
     if (music == NULL) {
         std::cerr << "Could not load music. ";
         std::cerr << "Mix_Error: " << Mix_GetError() << '\n';
+    }
+    // loading textures
+    {
+        Texture::create_global_texture("Player", new Texture(renderer, "img/player.png"));
+        Texture::create_global_texture("SpawnEnemy1", new Texture(renderer, "img/enemy.png"));
     }
 
     running = true;
@@ -397,7 +397,8 @@ int main(int argc, char *argv[]) {
     EntityFactory *_player = new EntityFactory();
     _player->lives({true, 100, 100})
         ->moves({Vec2::zero, 10})
-        ->occupies({new Rectangle(Vec2::zero, {1, 1})});
+        ->occupies({new Rectangle(Vec2::zero, {1, 1})})
+        ->textured({Texture::global_texture("Player")});
     World world(_player->create(), &timeline);
     delete _player;
     Entity *player = world.player;
@@ -421,22 +422,11 @@ int main(int argc, char *argv[]) {
     prev_ticks = SDL_GetTicks();
     Camera camera = Camera(new Rectangle(Vec2::zero, {10, 10}), &SCREEN_WIDTH, &SCREEN_HEIGHT);
 
-    SDL_Surface *s;
-    s = TTF_RenderText_Solid(FONT, "Rectangle", {255, 255, 255});
-    rectangle_mode::t = SDL_CreateTextureFromSurface(renderer, s);
-    rectangle_mode::r = {5, 5, s->w, s->h};
-    s = TTF_RenderText_Solid(FONT, "Polygon", {255, 255, 255});
-    polygon_mode::t = SDL_CreateTextureFromSurface(renderer, s);
-    polygon_mode::r = {5, 5, s->w, s->h};
-    s = TTF_RenderText_Solid(FONT, "Circle", {255, 255, 255});
-    circle_mode::t = SDL_CreateTextureFromSurface(renderer, s);
-    circle_mode::r = {5, 5, s->w, s->h};
-    s = TTF_RenderText_Solid(FONT, "Enemy", {255, 255, 255});
-    enemy_mode::t = SDL_CreateTextureFromSurface(renderer, s);
-    enemy_mode::r = {5, 5, s->w, s->h};
-    enemy_mode::rect = camera.screen_transform(new Rectangle({0, 0}, {1, 1}));
-    delete s;
-    int mode = polygon_mode::ID;
+    rectangle_mode::t = new Texture(renderer, "Rectangle", FONT, WHITE, 5, 5);
+    polygon_mode::t = new Texture(renderer, "Polygon", FONT, WHITE, 5, 5);
+    circle_mode::t = new Texture(renderer, "Circle", FONT, WHITE, 5, 5);
+    enemy_mode::t = new Texture(renderer, "Enemy", FONT, WHITE, 5, 5);
+    int mode = rectangle_mode::ID;
 
     std::vector<Region *> *solids = &map->solids;
     bool ctrl_press = false;
@@ -641,7 +631,6 @@ int main(int argc, char *argv[]) {
 
         update_timer.update_now(SDL_GetTicks());
         update_timer.process();
-        camera.occupies.region->move_to(player->occupies.region->center());
 
         // change colour of beat box based on bpm
         unsigned long long now = SDL_GetTicks() - prog_start;
@@ -662,6 +651,7 @@ int main(int argc, char *argv[]) {
         // moves players, projectiles, kills dead entities, etc.
         // world.clean_up();
         player->move(update_timer.diff() / 1000.0);
+        camera.occupies.region->move_to(player->occupies.region->center());
 
         // clear screen, beginning the drawing cycle
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -742,12 +732,14 @@ int main(int argc, char *argv[]) {
             rect = camera.screen_transform(e->occupies.region);
             // draw the player as a red crosshair instead of a white circle
             if (&(*e) == player) {
-                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-                rect = {(SCREEN_WIDTH - 10) / 2, (SCREEN_HEIGHT - 2) / 2, 10, 2};
-                SDL_RenderFillRect(renderer, &rect);
-                rect = {(SCREEN_WIDTH - 2) / 2, (SCREEN_HEIGHT - 10) / 2, 2, 10};
-                SDL_RenderFillRect(renderer, &rect);
-                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+                // SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+                // rect = {(SCREEN_WIDTH - 10) / 2, (SCREEN_HEIGHT - 2) / 2, 10, 2};
+                // SDL_RenderFillRect(renderer, &rect);
+                // rect = {(SCREEN_WIDTH - 2) / 2, (SCREEN_HEIGHT - 10) / 2, 2, 10};
+                // SDL_RenderFillRect(renderer, &rect);
+                // SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+                e->textured.texture->rect = rect;
+                e->textured.texture->draw();
             } else {
                 fill_circle(renderer, rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2);
             }
@@ -805,6 +797,7 @@ int main(int argc, char *argv[]) {
     Mix_FreeMusic(music);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    IMG_Quit();
     TTF_Quit();
     Mix_Quit();
     SDL_Quit();

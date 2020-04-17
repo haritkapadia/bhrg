@@ -27,15 +27,15 @@ Entity *World::spawn(Entity e) {
 
 void World::add_projectile(Projectile projectile) { projectiles.push_back(projectile); }
 
-bool World::test_collide(Entity *e, std::vector<Projectile>::iterator p) {
+bool test_collide(Entity *e, std::vector<Projectile>::iterator p) {
     return e->occupies.region->contains(p->position);
 }
 
 /**
  * Returns the maximum hits remaining for the projectile.
  */
-int World::apply_projectile_hit(Entity *e, std::vector<Projectile>::iterator p, Timeline *timeline,
-                                std::vector<Entity *> *temp_hit) {
+int apply_projectile_hit(Entity *e, std::vector<Projectile>::iterator p, Timeline *timeline,
+                         std::vector<Entity *> *temp_hit) {
     auto p_it = std::find(p->prev_hit.begin(), p->prev_hit.end(), e);
     auto t_it = std::find(temp_hit->begin(), temp_hit->end(), e);
     if (e != p->source && p_it == p->prev_hit.end() && t_it == temp_hit->end()) {
@@ -73,7 +73,7 @@ void World::move_projectiles(double duration) {
             // case 3: m is at l and r, lambda == 0
             // now! lambda can be found using (m.x - l.x) / (r.x - m.x)
             // however, since we just want the sign, we can multiply instead of
-            // divide this also allows us to avoid division errors and cover
+            // divide. This also allows us to avoid division errors and cover
             // case 3 with case 1
             if ((r.x - m.x) * (m.x - l.x) >= 0) {
                 hitp = true;
@@ -82,7 +82,6 @@ void World::move_projectiles(double duration) {
                 p->position = r;
             }
         }
-
         // check if it collided with an entity
         std::vector<Entity *> temp_hit;
         if (p->source == player) {
@@ -107,34 +106,23 @@ void World::move_projectiles(double duration) {
 
 void World::clean_up(SDL_Renderer *renderer, Camera *camera) {
     // moves all entities and projectiles in the world
-    for (auto _e = entities.begin(); _e != entities.end();) {
-        Entity e = *_e;
-        if (e.is_comp[Entity::LIVES] && !e.lives.alive) {
-            _e = entities.erase(_e);
+    for (auto e = entities.begin(); e != entities.end(); e++) {
+        if (e->is_comp[Entity::LIVES] && !e->lives.alive) {
+            auto _e = e;
+            _e--;
+            dead_entities.splice(dead_entities.begin(), entities, e);
+            e = _e;
             continue;
         }
-        if (e.is_comp[Entity::MOVES]) {
-            e.move(timeline->diff() / 1000.0);
+        if (e->is_comp[Entity::MOVES]) {
+            e->move(timeline->diff() / 1000.0);
         }
-        _e++;
     }
     move_projectiles(timeline->diff() / 1000.0);
-
     // collision detection: player with solids
     for (Region *s : map.solids) {
         for (Entity e : entities) {
             if (Region::might_collide(s, e.occupies.region)) {
-                // if (auto _s = dynamic_cast<Convex *>(s)) {
-                //     std::vector<Vec2> vertices = _s->vertices();
-                //     for (auto v = vertices.rbegin(); v != vertices.rend(); v++) {
-                //         Vec2 e_center = e.occupies.region->center();
-                //         SDL_Point a = camera->screen_transform(e_center);
-                //         SDL_Point b =
-                //             camera->screen_transform(e_center + Vec2::normalize(*v - e_center));
-                //         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-                //         SDL_RenderDrawLine(renderer, a.x, a.y, b.x, b.y);
-                //     }
-                // }
                 Vec2 translation = Region::uncollide(e.occupies.region, s);
                 if (translation != Vec2::zero) {
                     e.occupies.region->translate(translation);
