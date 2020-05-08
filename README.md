@@ -48,8 +48,10 @@ C:\bhrg> winmake bhrg
 
 Window and graphics management is done using [SDL2](https://www.libsdl.org/).
 
-This project also requires [SDL\_mixer](https://www.libsdl.org/projects/SDL_mixer/) and [SDL\_ttf](https://www.libsdl.org/projects/SDL_ttf/). Expect to require [SDL\_image](https://www.libsdl.org/projects/SDL_image/) in the future.
+This project also requires [SDL\_mixer](https://www.libsdl.org/projects/SDL_mixer/), [SDL\_ttf](https://www.libsdl.org/projects/SDL_ttf/), and [SDL\_image](https://www.libsdl.org/projects/SDL_image/).
 
-## Music
+## Attributions
 
 The music in the repo is "Chill or Be Chilled" by "The Polish Ambassador | Nitty Scott", found [here](https://freemusicarchive.org/music/The_Polish_Ambassador__Nitty_Scott).
+
+The font used throughout the project is Tanohe Sans, found [here](https://fontlibrary.org/en/font/tanohe-sans).

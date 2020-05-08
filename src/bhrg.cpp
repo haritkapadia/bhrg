@@ -195,7 +195,7 @@ int main(int argc, char *argv[]) {
 
     Timeline timeline;
     EntityFactory *_player = new EntityFactory();
-    _player->lives({true, 100, 100})
+    _player->lives({true, 3, 3})
         ->moves({Vec2::zero, 10})
         ->occupies({new Rectangle(Vec2::zero, {0.5, 0.5})})
         ->textured({Texture::global_texture("Player")});
@@ -217,10 +217,10 @@ int main(int argc, char *argv[]) {
         timefile.close();
     }
 
-    DamageOverTime *damage_event = new DamageOverTime({player}, 5000);
+    Damage *damage_event = new Damage({player});
     Spell damage_spell;
     damage_spell.type = Spell::PROJECTILE;
-    damage_spell.effects = {damage_event, new Speed({NULL}, 5000, 0.1)};
+    damage_spell.effects = {damage_event};
     damage_spell.source = player;
     Speed *speed_event = new Speed({player}, 5000, 3.0);
     Spell speed_spell;

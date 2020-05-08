@@ -18,6 +18,15 @@ class Effect : public Event {
     virtual Effect *clone() = 0;
 };
 
+class Damage : public Effect {
+  public:
+    Damage(std::vector<Entity *> targets);
+    virtual void start(Entity *e);
+    virtual void stop(Entity *e);
+    virtual void pulse(Entity *e);
+    virtual Damage *clone();
+};
+
 class DamageOverTime : public Effect {
   public:
     DamageOverTime(std::vector<Entity *> targets, unsigned long long duration);

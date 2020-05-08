@@ -1,5 +1,3 @@
-// UNORDERED_SET IN WORLD PROJECTILES KILLS THE PROGRAM AHHHH!!!!
-
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_mixer.h>
 #include <SDL2/SDL_ttf.h>
@@ -358,7 +356,7 @@ int main(int argc, char *argv[]) {
         std::cerr << "Could not create TTF loader. ";
         std::cerr << "TTF_Error: " << TTF_GetError() << '\n';
     }
-    FONT = TTF_OpenFont("calibri.ttf", 12);
+    FONT = TTF_OpenFont("TanoheSans-Regular.ttf", 12);
     if (FONT == NULL) {
         std::cerr << "Could not load font. ";
         std::cerr << "TTF_Error: " << TTF_GetError() << '\n';

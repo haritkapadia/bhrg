@@ -23,6 +23,16 @@ void Effect::act(double progress) {
     }
 }
 
+Damage::Damage(std::vector<Entity *> targets) : Effect(targets, 0) {}
+
+Damage *Damage::clone() {
+    Damage *other = new Damage(targets);
+    return other;
+}
+void Damage::start(Entity *e) { e->lives.damage(1); }
+void Damage::pulse(Entity *e) {}
+void Damage::stop(Entity *e) {}
+
 DamageOverTime::DamageOverTime(std::vector<Entity *> targets, unsigned long long duration)
     : Effect(targets, duration) {
     pulses = 50;

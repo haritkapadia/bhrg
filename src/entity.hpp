@@ -18,14 +18,14 @@ class Entity {
         double health;
         void damage(double dh) {
             health -= dh;
-            if (health < 0)
+            if (health <= 0)
                 alive = false;
         }
         void heal(double dh) {
             health += dh;
             if (health > max_health)
                 health = max_health;
-            else if (health < 0)
+            else if (health <= 0)
                 alive = false;
         }
         void kill() {

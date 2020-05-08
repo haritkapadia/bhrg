@@ -92,7 +92,7 @@ void Timeline::read(std::istream *fin) {
             fin->read((char *)&start.y, sizeof(double));
             fin->read((char *)&speed, sizeof(double));
             EntityFactory *_enemy = new EntityFactory();
-            _enemy->lives({true, 200, 200})
+            _enemy->lives({true, 1, 1})
                 ->moves({Vec2::zero, speed})
                 ->occupies({new Circle(start, 0.5)})
                 ->textured({Texture::global_texture("SpawnEnemy1")});
