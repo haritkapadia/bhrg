@@ -22,7 +22,7 @@ test : test.o texture.o
 
 .PHONY : clean
 clean :
-	del bhrg.exe mapmaker.exe test.exe $(OBJECTS)
+	rm bhrg mapmaker test $(OBJECTS)
 
 
 bhrg.o: bhrg.cpp camera.hpp region.hpp vec.hpp \
