@@ -9,13 +9,12 @@ Make sure you've downloaded/installed GNU Make, SDL2, SDL_mixer, and SDL_ttf.
 Are you on Windows?
 
 ```
-copy C:\Windows\Fonts\calibri.ttf .
 winmake mapmaker
 winmake bhrg
 build\bhrg region_test.map region_test.time
 ```
 
-Are you on Linux? Sorry, you need to do a little work. Edit `src/mapmaker`, change `"calibri.ttf"` to the font of your choice. Then you can compile as normal.
+Are you on Linux?
 
 ```
 ./make mapmaker
